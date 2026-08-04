@@ -1,0 +1,9 @@
+# Environment & secret files
+.env
+*.env
+
+# Python / Django
+__pycache__/
+*.py[cod]
+*.sqlite3
+*.db
