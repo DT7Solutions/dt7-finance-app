@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_logo.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_text_field.dart';
 import '03_dashboard_screen.dart';
@@ -70,14 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               const SizedBox(height: 30),
               // Brand Logo Header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('DT7.', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: AppColors.primary)),
-                  const SizedBox(width: 4),
-                  Text('AGENCY', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 2.0, color: Colors.grey.shade700)),
-                ],
-              ),
+              const AppLogo(height: 70),
               const SizedBox(height: 36),
               const Text('Welcome Back!', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),

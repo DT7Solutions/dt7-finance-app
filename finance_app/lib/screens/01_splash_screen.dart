@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_logo.dart';
 import '02_login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -144,68 +145,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   }
 
   Widget _buildCenteredLogo() {
-    return Center(
-      child: Image.asset(
-        'assets/images/dt7_logo.png',
-        height: 135,
-        fit: BoxFit.contain,
-        errorBuilder: (context, error, stackTrace) => Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              alignment: Alignment.center,
-              children: [
-                // Pixel grid blocks ascending top-left above D
-                Positioned(
-                  left: -15,
-                  top: -15,
-                  child: SizedBox(
-                    width: 28,
-                    height: 28,
-                    child: Stack(
-                      children: [
-                        Positioned(left: 0, top: 0, child: Container(width: 5, height: 5, color: const Color(0xFFFF5000))),
-                        Positioned(left: 8, top: 0, child: Container(width: 6, height: 6, color: const Color(0xFFFF5000))),
-                        Positioned(left: 0, top: 8, child: Container(width: 6, height: 6, color: const Color(0xFFFF5000))),
-                        Positioned(left: 9, top: 9, child: Container(width: 9, height: 9, color: const Color(0xFFFF5000))),
-                        Positioned(left: 19, top: 2, child: Container(width: 5, height: 5, color: const Color(0xFFFF5000))),
-                        Positioned(left: 19, top: 10, child: Container(width: 7, height: 7, color: const Color(0xFFFF5000))),
-                      ],
-                    ),
-                  ),
-                ),
-                const Text(
-                  'DT7.',
-                  style: TextStyle(
-                    fontSize: 58,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFFFF5000),
-                    letterSpacing: -2.0,
-                    height: 1.0,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            const Padding(
-              padding: EdgeInsets.only(left: 8.0),
-              child: Text(
-                'AGENCY',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 8.0,
-                  color: Color(0xFF262626),
-                  height: 1.0,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return const AppLogo(height: 135);
   }
 
   Widget _buildCenteredHero() {
