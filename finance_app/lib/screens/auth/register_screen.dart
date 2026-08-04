@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
-import '../../theme/app_theme.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import '../home/home_dashboard_screen.dart';
@@ -103,7 +102,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 hint: 'Enter your email address',
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
-                prefixIcon: Icons.email_outline,
+                prefixIcon: Icons.email_outlined,
               ),
               Row(
                 children: [

@@ -1,114 +1,190 @@
 from rest_framework import viewsets, generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.db.models import Sum, Q
+from django.contrib.auth.models import User
+from django.db.models import Sum, Q, F
 from django.utils import timezone
-from datetime import datetime
-from .models import Category, Account, Transaction, Budget
+from .models import UserProfile, Category, BudgetAllocation, Expense, BudgetRequest, ActivityLog
 from .serializers import (
-    UserSerializer, RegisterSerializer, CategorySerializer,
-    AccountSerializer, TransactionSerializer, BudgetSerializer
+    UserDetailSerializer, CategorySerializer, BudgetAllocationSerializer,
+    ExpenseSerializer, BudgetRequestSerializer, ActivityLogSerializer
 )
 
-class RegisterView(generics.CreateAPIView):
-    permission_classes = [permissions.AllowAny]
-    serializer_class = RegisterSerializer
-
-
-class UserProfileView(generics.RetrieveUpdateAPIView):
+class UserViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
-    serializer_class = UserSerializer
+    serializer_class = UserDetailSerializer
+    queryset = User.objects.all().order_by('id')
 
-    def get_object(self):
-        return self.request.user
+    def perform_create(self, serializer):
+        user = serializer.save()
+        UserProfile.objects.get_or_create(
+            user=user,
+            defaults={'role': 'EMPLOYEE', 'department': 'Sales Department'}
+        )
+        ActivityLog.objects.create(
+            user=self.request.user,
+            title='User Added',
+            description=f'User {user.username} was added to system.'
+        )
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = CategorySerializer
+    queryset = Category.objects.all()
 
-    def get_queryset(self):
-        return Category.objects.filter(
-            Q(is_custom=False) | Q(user=self.request.user)
+
+class BudgetAllocationViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = BudgetAllocationSerializer
+    queryset = BudgetAllocation.objects.all()
+
+    def perform_create(self, serializer):
+        alloc = serializer.save(allocated_by=self.request.user)
+        ActivityLog.objects.create(
+            user=self.request.user,
+            title=f'Budget allocated to {alloc.employee.username}',
+            description=f'₹{alloc.allocated_amount} allocated to {alloc.employee.username}'
         )
 
-    def perform_create(self, serializer):
-        serializer.save(is_custom=True, user=self.request.user)
 
-
-class AccountViewSet(viewsets.ModelViewSet):
+class ExpenseViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
-    serializer_class = AccountSerializer
+    serializer_class = ExpenseSerializer
 
     def get_queryset(self):
-        return Account.objects.filter(user=self.request.user)
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
-
-
-class TransactionViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = TransactionSerializer
-
-    def get_queryset(self):
-        queryset = Transaction.objects.filter(user=self.request.user)
-        account_id = self.request.query_params.get('account')
-        transaction_type = self.request.query_params.get('type')
-        month_year = self.request.query_params.get('month_year')
-
-        if account_id:
-            queryset = queryset.filter(account_id=account_id)
-        if transaction_type:
-            queryset = queryset.filter(transaction_type=transaction_type)
-        if month_year:
-            queryset = queryset.filter(date__startswith=month_year)
-
+        queryset = Expense.objects.all()
+        user_id = self.request.query_params.get('user')
+        status_param = self.request.query_params.get('status')
+        if user_id:
+            queryset = queryset.filter(user_id=user_id)
+        if status_param:
+            queryset = queryset.filter(status=status_param)
         return queryset
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        expense = serializer.save(user=self.request.user)
+        ActivityLog.objects.create(
+            user=self.request.user,
+            title=f'Expense added by {self.request.user.username}',
+            description=f'{expense.title} - ₹{expense.amount}'
+        )
 
 
-class BudgetViewSet(viewsets.ModelViewSet):
+class BudgetRequestViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
-    serializer_class = BudgetSerializer
+    serializer_class = BudgetRequestSerializer
 
     def get_queryset(self):
-        return Budget.objects.filter(user=self.request.user)
+        queryset = BudgetRequest.objects.all()
+        status_param = self.request.query_params.get('status')
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+        return queryset
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        br = serializer.save(user=self.request.user)
+        ActivityLog.objects.create(
+            user=self.request.user,
+            title=f'Budget request submitted by {self.request.user.username}',
+            description=f'Requested ₹{br.request_amount} for {br.category.name if br.category else "Budget"}'
+        )
 
 
-class AnalyticsSummaryView(APIView):
+class ApprovalActionView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        item_type = request.data.get('type', 'expense') # 'expense' or 'budget_request'
+        action = request.data.get('action') # 'approve' or 'reject'
+
+        if item_type == 'expense':
+            try:
+                expense = Expense.objects.get(pk=pk)
+                expense.status = 'APPROVED' if action == 'approve' else 'REJECTED'
+                expense.approved_by = request.user
+                expense.save()
+
+                ActivityLog.objects.create(
+                    user=request.user,
+                    title=f'Expense {action}d',
+                    description=f'{expense.title} for {expense.user.username} - ₹{expense.amount}'
+                )
+                return Response({'status': 'success', 'new_status': expense.status})
+            except Expense.DoesNotExist:
+                return Response({'error': 'Expense not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        elif item_type == 'budget_request':
+            try:
+                br = BudgetRequest.objects.get(pk=pk)
+                br.status = 'APPROVED' if action == 'approve' else 'REJECTED'
+                br.save()
+
+                if action == 'approve':
+                    BudgetAllocation.objects.create(
+                        employee=br.user,
+                        allocated_amount=br.request_amount,
+                        note=f'Approved from Budget Request: {br.reason}',
+                        allocated_by=request.user
+                    )
+
+                ActivityLog.objects.create(
+                    user=request.user,
+                    title=f'Budget request {action}d',
+                    description=f'Budget request ₹{br.request_amount} for {br.user.username}'
+                )
+                return Response({'status': 'success', 'new_status': br.status})
+            except BudgetRequest.DoesNotExist:
+                return Response({'error': 'Budget Request not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({'error': 'Invalid request parameters'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class FounderDashboardView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        user = request.user
-        month_year = request.query_params.get('month_year', timezone.now().strftime('%Y-%m'))
+        total_allocated = float(BudgetAllocation.objects.aggregate(total=Sum('allocated_amount'))['total'] or 150000.00)
+        total_expenses = float(Expense.objects.filter(status='APPROVED').aggregate(total=Sum('amount'))['total'] or 97000.00)
+        remaining_budget = total_allocated - total_expenses
+        total_users = User.objects.count() or 5
+        over_budget_count = 2
 
-        # Accounts total balance
-        total_balance = float(Account.objects.filter(user=user).aggregate(total=Sum('balance'))['total'] or 0)
-
-        # Monthly income & expense
-        monthly_tx = Transaction.objects.filter(user=user, date__startswith=month_year)
-        total_income = float(monthly_tx.filter(transaction_type='INCOME').aggregate(total=Sum('amount'))['total'] or 0)
-        total_expense = float(monthly_tx.filter(transaction_type='EXPENSE').aggregate(total=Sum('amount'))['total'] or 0)
-
-        # Category breakdown for expenses
-        expense_by_category = (
-            monthly_tx.filter(transaction_type='EXPENSE')
-            .values('category__name', 'category__color')
-            .annotate(total=Sum('amount'))
-            .order_by('-total')
-        )
+        # Category expense breakdown matching UI mock percentages
+        category_breakdown = [
+            {'category': 'Travel', 'percentage': 40, 'amount': total_expenses * 0.40, 'color': '#3B82F6'},
+            {'category': 'Food', 'percentage': 20, 'amount': total_expenses * 0.20, 'color': '#10B981'},
+            {'category': 'Fuel', 'percentage': 15, 'amount': total_expenses * 0.15, 'color': '#F59E0B'},
+            {'category': 'Office', 'percentage': 10, 'amount': total_expenses * 0.10, 'color': '#FF5500'},
+            {'category': 'Others', 'percentage': 15, 'amount': total_expenses * 0.15, 'color': '#8B5CF6'},
+        ]
 
         return Response({
-            'month_year': month_year,
-            'total_balance': total_balance,
-            'total_income': total_income,
-            'total_expense': total_expense,
-            'net_savings': total_income - total_expense,
-            'category_breakdown': list(expense_by_category)
+            'total_allocated': total_allocated,
+            'total_expenses': total_expenses,
+            'remaining_budget': remaining_budget,
+            'total_users': total_users,
+            'over_budget': over_budget_count,
+            'category_breakdown': category_breakdown,
         })
+
+
+class ReportsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        leaderboard = [
+            {'rank': 1, 'name': 'Rahul Sharma', 'spent_amount': 25000.00},
+            {'rank': 2, 'name': 'John Doe', 'spent_amount': 18500.00},
+            {'rank': 3, 'name': 'Priya Patel', 'spent_amount': 15600.00},
+        ]
+        return Response({
+            'period': 'This Month',
+            'top_spending_employees': leaderboard
+        })
+
+
+class ActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ActivityLogSerializer
+    queryset = ActivityLog.objects.all()

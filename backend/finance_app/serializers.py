@@ -1,30 +1,34 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.db.models import Sum
-from .models import Category, Account, Transaction, Budget
+from .models import UserProfile, Category, BudgetAllocation, Expense, BudgetRequest, ActivityLog
 
-class UserSerializer(serializers.ModelSerializer):
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserProfile
+        fields = ['role', 'department', 'employee_id', 'phone', 'join_date', 'allocated_budget']
+
+
+class UserDetailSerializer(serializers.ModelSerializer):
+    profile = UserProfileSerializer(read_only=True)
+    allocated_amount = serializers.SerializerMethodField()
+    used_amount = serializers.SerializerMethodField()
+    remaining_amount = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'profile', 'allocated_amount', 'used_amount', 'remaining_amount']
 
+    def get_allocated_amount(self, obj):
+        alloc = BudgetAllocation.objects.filter(employee=obj).aggregate(total=Sum('allocated_amount'))['total']
+        return float(alloc or 0.00)
 
-class RegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, min_length=6)
+    def get_used_amount(self, obj):
+        used = Expense.objects.filter(user=obj, status='APPROVED').aggregate(total=Sum('amount'))['total']
+        return float(used or 0.00)
 
-    class Meta:
-        model = User
-        fields = ['username', 'email', 'password', 'first_name', 'last_name']
-
-    def create(self, validated_data):
-        user = User.objects.create_user(
-            username=validated_data['username'],
-            email=validated_data.get('email', ''),
-            password=validated_data['password'],
-            first_name=validated_data.get('first_name', ''),
-            last_name=validated_data.get('last_name', '')
-        )
-        return user
+    def get_remaining_amount(self, obj):
+        return self.get_allocated_amount(obj) - self.get_used_amount(obj)
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -33,56 +37,44 @@ class CategorySerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'type', 'icon', 'color', 'is_custom']
 
 
-class AccountSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Account
-        fields = ['id', 'name', 'account_type', 'balance', 'currency', 'account_number', 'is_active', 'created_at', 'updated_at']
-        read_only_fields = ['id', 'created_at', 'updated_at']
-
-
-class TransactionSerializer(serializers.ModelSerializer):
-    category_detail = CategorySerializer(source='category', read_only=True)
-    account_name = serializers.CharField(source='account.name', read_only=True)
+class BudgetAllocationSerializer(serializers.ModelSerializer):
+    employee_name = serializers.CharField(source='employee.username', read_only=True)
+    allocated_by_name = serializers.CharField(source='allocated_by.username', read_only=True)
 
     class Meta:
-        model = Transaction
+        model = BudgetAllocation
+        fields = ['id', 'employee', 'employee_name', 'allocated_amount', 'note', 'allocated_by', 'allocated_by_name', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+
+class ExpenseSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.username', read_only=True)
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    category_color = serializers.CharField(source='category.color', read_only=True)
+
+    class Meta:
+        model = Expense
         fields = [
-            'id', 'account', 'account_name', 'category', 'category_detail',
-            'title', 'amount', 'transaction_type', 'date', 'notes', 'created_at'
+            'id', 'title', 'amount', 'category', 'category_name', 'category_color',
+            'user', 'user_name', 'description', 'date_time', 'status',
+            'payment_mode', 'receipt_image', 'approved_by', 'created_at'
         ]
         read_only_fields = ['id', 'created_at']
 
-    def create(self, validated_data):
-        transaction = Transaction.objects.create(**validated_data)
-        # Update account balance based on transaction
-        account = transaction.account
-        if transaction.transaction_type == 'INCOME':
-            account.balance += transaction.amount
-        elif transaction.transaction_type == 'EXPENSE':
-            account.balance -= transaction.amount
-        account.save()
-        return transaction
 
-
-class BudgetSerializer(serializers.ModelSerializer):
-    category_detail = CategorySerializer(source='category', read_only=True)
-    spent_amount = serializers.SerializerMethodField()
-    remaining_amount = serializers.SerializerMethodField()
+class BudgetRequestSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.username', read_only=True)
+    category_name = serializers.CharField(source='category.name', read_only=True)
 
     class Meta:
-        model = Budget
-        fields = ['id', 'category', 'category_detail', 'limit_amount', 'month_year', 'spent_amount', 'remaining_amount']
+        model = BudgetRequest
+        fields = ['id', 'user', 'user_name', 'request_amount', 'category', 'category_name', 'reason', 'status', 'created_at']
+        read_only_fields = ['id', 'created_at']
 
-    def get_spent_amount(self, obj):
-        user = self.context['request'].user if 'request' in self.context else obj.user
-        spent = Transaction.objects.filter(
-            user=user,
-            category=obj.category,
-            transaction_type='EXPENSE',
-            date__startswith=obj.month_year
-        ).aggregate(total=Sum('amount'))['total']
-        return float(spent or 0.00)
 
-    def get_remaining_amount(self, obj):
-        spent = self.get_spent_amount(obj)
-        return float(obj.limit_amount) - spent
+class ActivityLogSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.username', read_only=True)
+
+    class Meta:
+        model = ActivityLog
+        fields = ['id', 'user', 'user_name', 'title', 'description', 'timestamp', 'log_type']

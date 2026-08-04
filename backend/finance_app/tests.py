@@ -2,52 +2,46 @@ from django.test import TestCase
 from django.contrib.auth.models import User
 from rest_framework.test import APIClient
 from rest_framework import status
-from .models import Category, Account, Transaction, Budget
+from .models import UserProfile, Category, BudgetAllocation, Expense, BudgetRequest, ActivityLog
 
-class FinanceAppTests(TestCase):
+class DT7AgencyFinanceTests(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.user = User.objects.create_user(username='testuser', password='password123', email='test@dt7.com')
+        self.user = User.objects.create_user(username='johndoe', password='password123', email='john.doe@example.com')
         self.client.force_authenticate(user=self.user)
 
-        self.category = Category.objects.create(name='Groceries', type='EXPENSE', icon='shopping_cart', color='#FF0000')
-        self.account = Account.objects.create(user=self.user, name='Main Checking', account_type='CHECKING', balance=1500.00)
+        self.profile = UserProfile.objects.create(user=self.user, role='EMPLOYEE', department='Sales Department', employee_id='DT7EMP001')
+        self.category = Category.objects.create(name='Fuel', type='EXPENSE', icon='local_gas_station', color='#F59E0B')
 
-    def test_account_creation(self):
-        response = self.client.post('/api/v1/accounts/', {
-            'name': 'Savings Goal',
-            'account_type': 'SAVINGS',
-            'balance': 5000.00,
-            'currency': 'USD'
+    def test_budget_allocation(self):
+        response = self.client.post('/api/v1/allocations/', {
+            'employee': self.user.id,
+            'allocated_amount': 10000.00,
+            'note': 'Initial Monthly Budget'
         })
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(Account.objects.filter(user=self.user).count(), 2)
+        self.assertEqual(BudgetAllocation.objects.count(), 1)
 
-    def test_transaction_creation_and_balance_update(self):
-        response = self.client.post('/api/v1/transactions/', {
-            'account': self.account.id,
-            'category': self.category.id,
-            'title': 'Supermarket Purchase',
-            'amount': 150.00,
-            'transaction_type': 'EXPENSE',
-            'date': '2026-08-04'
-        })
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.account.refresh_from_db()
-        self.assertEqual(float(self.account.balance), 1350.00)
-
-    def test_analytics_summary(self):
-        Transaction.objects.create(
+    def test_expense_creation_and_approval(self):
+        expense = Expense.objects.create(
             user=self.user,
-            account=self.account,
+            title='Fuel Expense',
+            amount=1000.00,
             category=self.category,
-            title='Test Income',
-            amount=2000.00,
-            transaction_type='INCOME',
-            date='2026-08-04'
+            date_time='2026-08-04T05:45:00Z',
+            status='PENDING'
         )
-        response = self.client.get('/api/v1/analytics/summary/')
+        response = self.client.post(f'/api/v1/approvals/{expense.id}/action/', {
+            'type': 'expense',
+            'action': 'approve'
+        })
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('total_balance', response.data)
-        self.assertIn('total_income', response.data)
-        self.assertEqual(response.data['total_income'], 2000.00)
+        expense.refresh_from_db()
+        self.assertEqual(expense.status, 'APPROVED')
+
+    def test_founder_dashboard(self):
+        response = self.client.get('/api/v1/dashboard/founder/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('total_allocated', response.data)
+        self.assertIn('total_expenses', response.data)
+        self.assertIn('category_breakdown', response.data)

@@ -1,29 +1,22 @@
 import 'package:flutter/material.dart';
-import 'services/auth_service.dart';
+import 'screens/01_splash_screen.dart';
 import 'theme/app_theme.dart';
-import 'screens/auth/login_screen.dart';
-import 'screens/home/home_dashboard_screen.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  final isAuthenticated = await AuthService.isAuthenticated();
-  runApp(DT7FinanceApp(isAuthenticated: isAuthenticated));
+  runApp(const DT7AgencyFinanceApp());
 }
 
-class DT7FinanceApp extends StatelessWidget {
-  final bool isAuthenticated;
-
-  const DT7FinanceApp({Key? key, required this.isAuthenticated}) : super(key: key);
+class DT7AgencyFinanceApp extends StatelessWidget {
+  const DT7AgencyFinanceApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'DT7 Finance',
+      title: 'DT7 Agency Finance',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system,
-      home: isAuthenticated ? const HomeDashboardScreen() : const LoginScreen(),
+      theme: AppTheme.theme,
+      home: const SplashScreen(),
     );
   }
 }

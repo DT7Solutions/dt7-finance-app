@@ -3,7 +3,6 @@ import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
-import 'register_screen.dart';
 import '../home/home_dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -108,25 +107,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 text: 'Sign In',
                 onPressed: _handleLogin,
                 isLoading: _isLoading,
-              ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text("Don't have an account? "),
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const RegisterScreen()),
-                      );
-                    },
-                    child: const Text(
-                      'Register',
-                      style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
               ),
             ],
           ),

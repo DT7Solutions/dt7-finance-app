@@ -1,20 +1,22 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    RegisterView, UserProfileView, CategoryViewSet,
-    AccountViewSet, TransactionViewSet, BudgetViewSet,
-    AnalyticsSummaryView
+    UserViewSet, CategoryViewSet, BudgetAllocationViewSet,
+    ExpenseViewSet, BudgetRequestViewSet, ApprovalActionView,
+    FounderDashboardView, ReportsView, ActivityLogViewSet
 )
 
 router = DefaultRouter()
+router.register(r'users', UserViewSet, basename='user')
 router.register(r'categories', CategoryViewSet, basename='category')
-router.register(r'accounts', AccountViewSet, basename='account')
-router.register(r'transactions', TransactionViewSet, basename='transaction')
-router.register(r'budgets', BudgetViewSet, basename='budget')
+router.register(r'allocations', BudgetAllocationViewSet, basename='allocation')
+router.register(r'expenses', ExpenseViewSet, basename='expense')
+router.register(r'budget-requests', BudgetRequestViewSet, basename='budget-request')
+router.register(r'activity-logs', ActivityLogViewSet, basename='activity-log')
 
 urlpatterns = [
-    path('auth/register/', RegisterView.as_view(), name='register'),
-    path('auth/profile/', UserProfileView.as_view(), name='profile'),
-    path('analytics/summary/', AnalyticsSummaryView.as_view(), name='analytics-summary'),
+    path('dashboard/founder/', FounderDashboardView.as_view(), name='founder-dashboard'),
+    path('reports/', ReportsView.as_view(), name='reports'),
+    path('approvals/<int:pk>/action/', ApprovalActionView.as_view(), name='approval-action'),
     path('', include(router.urls)),
 ]

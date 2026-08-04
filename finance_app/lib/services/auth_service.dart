@@ -4,8 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
 
 class AuthService {
-  // Base URL supports localhost, Android emulator (10.0.2.2), or custom host
-  static String baseUrl = 'http://10.0.2.2:8000/api/v1';
+  // Base URL supports local Wi-Fi IP (192.168.0.7), Android emulator (10.0.2.2), or custom host
+  static String baseUrl = 'http://192.168.0.7:8000/api/v1';
 
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
