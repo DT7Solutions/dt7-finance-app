@@ -15,30 +15,38 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController(text: 'founder@dt7.agency');
-  final _passwordController = TextEditingController(text: 'password123');
+  final _emailController = TextEditingController(text: 'admin@gmail.com');
+  final _passwordController = TextEditingController(text: '123456');
   bool _rememberMe = true;
   bool _isLoading = false;
+  bool _obscurePassword = true;
   String? _errorMessage;
 
   Future<void> _handleLogin() async {
+    final input = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (input.isEmpty || password.isEmpty) {
+      setState(() {
+        _errorMessage = 'Please enter both email and password';
+      });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
-    final input = _emailController.text.trim();
-    // Default username fallback for quick dev test
-    final username = input.contains('@') ? (input.startsWith('founder') ? 'founder' : 'john_doe') : input;
-
-    final success = await AuthService.login(username, _passwordController.text);
+    final role = await AuthService.authenticateUser(input, password);
 
     setState(() {
       _isLoading = false;
     });
 
-    if (success && mounted) {
-      if (username == 'founder') {
+    if (role != null && mounted) {
+      // Role-Based Authentication Routing
+      if (role == 'FOUNDER' || role == 'ADMIN') {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const FounderDashboardScreen()),
@@ -50,12 +58,9 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } else if (mounted) {
-      // Offline / fallback dev routing
-      if (input.contains('founder')) {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const FounderDashboardScreen()));
-      } else {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const EmployeeDashboardScreen()));
-      }
+      setState(() {
+        _errorMessage = 'Invalid email or password. Please check credentials.';
+      });
     }
   }
 
@@ -76,16 +81,36 @@ class _LoginScreenState extends State<LoginScreen> {
               const Text('Welcome Back!', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               Text('Sign in to continue', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
 
               if (_errorMessage != null) ...[
-                Text(_errorMessage!, style: const TextStyle(color: Colors.red, fontSize: 12)),
-                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
               ],
 
               CustomTextField(
-                label: 'Email',
-                hint: 'youremail@example.com',
+                label: 'Email / Username',
+                hint: 'admin@gmail.com or employee@gmail.com',
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
               ),
@@ -93,7 +118,19 @@ class _LoginScreenState extends State<LoginScreen> {
                 label: 'Password',
                 hint: 'Enter your password',
                 controller: _passwordController,
-                obscureText: true,
+                obscureText: _obscurePassword,
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                    color: Colors.grey.shade600,
+                    size: 20,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _obscurePassword = !_obscurePassword;
+                    });
+                  },
+                ),
               ),
 
               Row(
@@ -116,7 +153,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   TextButton(
                     onPressed: () {},
-                    child: Text('Forgot Password?', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
+                    child: const Text('Forgot Password?', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),

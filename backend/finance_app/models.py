@@ -112,3 +112,17 @@ class ActivityLog(models.Model):
 
     def __str__(self):
         return f"{self.title} - {self.timestamp.strftime('%d %b %Y, %I:%M %p')}"
+
+
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+@receiver(post_save, sender=User)
+def create_or_update_user_profile(sender, instance, created, **kwargs):
+    if created:
+        role = 'ADMIN' if (instance.is_superuser or instance.username in ['admin', 'founder']) else 'EMPLOYEE'
+        UserProfile.objects.get_or_create(user=instance, defaults={'role': role})
+    else:
+        if hasattr(instance, 'profile'):
+            instance.profile.save()
+

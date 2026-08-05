@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_header_icon_button.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_text_field.dart';
+import '03_dashboard_screen.dart';
 
 class AllocateBudgetScreen extends StatefulWidget {
-  const AllocateBudgetScreen({Key? key}) : super(key: key);
+  final VoidCallback? onBackPressed;
+
+  const AllocateBudgetScreen({super.key, this.onBackPressed});
 
   @override
   State<AllocateBudgetScreen> createState() => _AllocateBudgetScreenState();
@@ -61,83 +65,166 @@ class _AllocateBudgetScreenState extends State<AllocateBudgetScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Allocate Budget'),
-      ),
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20.0),
+          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Top Wallet Illustration Card
-              Container(
-                width: 120,
-                height: 100,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryLight,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Icon(Icons.account_balance_wallet, size: 60, color: AppColors.primary),
+              // 1. Top Bar Header (Back Button, Extra Bold Title)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  AppHeaderIconButton(
+                    icon: Icons.arrow_back,
+                    onPressed: () {
+                      if (widget.onBackPressed != null) {
+                        widget.onBackPressed!();
+                      } else if (Navigator.canPop(context)) {
+                        Navigator.pop(context);
+                      } else {
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(builder: (_) => const FounderDashboardScreen()),
+                          (route) => false,
+                        );
+                      }
+                    },
+                  ),
+                  const Text(
+                    'Allocate Budget',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF111827),
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                ],
               ),
-              const SizedBox(height: 16),
-              const Text('Allocate budget to employee', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 24),
 
-              // Form
+              // 2. Wallet Illustration Circle & Subtitle
+              Center(
+                child: Column(
+                  children: [
+                    const WalletIllustrationWidget(size: 140),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Allocate budget to employee',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF111827),
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 28),
+
+              // 3. Form Content
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Select Employee', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                  const Text(
+                    'Select Employee',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF374151),
+                    ),
+                  ),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<int>(
                     value: _selectedEmployeeId,
-                    decoration: const InputDecoration(border: OutlineInputBorder()),
+                    icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF1F2937)),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade200),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade200),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                      ),
+                    ),
                     items: (_users.isNotEmpty
                             ? _users
                             : [
                                 UserModel(id: 1, username: 'john_doe', email: 'john.doe@example.com', firstName: 'John', lastName: 'Doe'),
                                 UserModel(id: 2, username: 'rahul_sharma', email: 'rahul@example.com', firstName: 'Rahul', lastName: 'Sharma'),
                               ])
-                        .map((u) => DropdownMenuItem(value: u.id, child: Text(u.fullName)))
+                        .map((u) => DropdownMenuItem(
+                              value: u.id,
+                              child: Text(
+                                u.fullName,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF1F2937),
+                                ),
+                              ),
+                            ))
                         .toList(),
                     onChanged: (val) => setState(() => _selectedEmployeeId = val),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
 
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(10)),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text('Current Balance', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                        SizedBox(height: 2),
-                        Text('₹10,000', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      ],
+                  // Current Balance Section
+                  const Text(
+                    'Current Balance',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF6B7280),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 4),
+                  const Text(
+                    '₹10,000',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
 
+                  // Amount Input
                   CustomTextField(
                     label: 'Amount to Allocate (₹)',
                     hint: '10000',
                     controller: _amountController,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   ),
+                  const SizedBox(height: 14),
+
+                  // Note Input
                   CustomTextField(
                     label: 'Note (Optional)',
                     hint: 'Enter a note',
                     controller: _noteController,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
 
+                  // Action Button
                   CustomButton(
                     text: 'Allocate',
                     onPressed: _handleAllocate,
                     isLoading: _isAllocating,
                   ),
+                  const SizedBox(height: 12),
                 ],
               ),
             ],
@@ -147,3 +234,109 @@ class _AllocateBudgetScreenState extends State<AllocateBudgetScreen> {
     );
   }
 }
+
+class WalletIllustrationWidget extends StatelessWidget {
+  final double size;
+
+  const WalletIllustrationWidget({super.key, this.size = 140});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(
+        painter: _WalletPainter(),
+      ),
+    );
+  }
+}
+
+class _WalletPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+
+    // 1. Soft Peach Background Circle
+    final bgPaint = Paint()
+      ..color = const Color(0xFFFFF0E5)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, radius, bgPaint);
+
+    // Save state for angled wallet
+    canvas.save();
+    canvas.translate(center.dx - 10, center.dy + 4);
+    canvas.rotate(-0.12); // Tilted angle matching image
+
+    // 2. Card Sticking out of wallet top
+    final cardPaint = Paint()
+      ..color = const Color(0xFFFFD4C0)
+      ..style = PaintingStyle.fill;
+    final cardRRect = RRect.fromRectAndRadius(
+      const Rect.fromLTRB(-35, -38, 15, -10),
+      const Radius.circular(6),
+    );
+    canvas.drawRRect(cardRRect, cardPaint);
+
+    // 3. Main Orange Wallet Body
+    final walletPaint = Paint()
+      ..color = const Color(0xFFFF5500)
+      ..style = PaintingStyle.fill;
+    final walletRRect = RRect.fromRectAndRadius(
+      const Rect.fromLTRB(-45, -20, 35, 28),
+      const Radius.circular(10),
+    );
+    canvas.drawRRect(walletRRect, walletPaint);
+
+    // 4. Dark Grey Flap / Compartment
+    final flapPaint = Paint()
+      ..color = const Color(0xFF374151)
+      ..style = PaintingStyle.fill;
+    final flapRRect = RRect.fromRectAndRadius(
+      const Rect.fromLTRB(0, -20, 35, 8),
+      const Radius.circular(8),
+    );
+    canvas.drawRRect(flapRRect, flapPaint);
+
+    // 5. Clasp tab & Button
+    final claspPaint = Paint()
+      ..color = const Color(0xFFD97706)
+      ..style = PaintingStyle.fill;
+    final claspRRect = RRect.fromRectAndRadius(
+      const Rect.fromLTRB(-4, -10, 10, 2),
+      const Radius.circular(4),
+    );
+    canvas.drawRRect(claspRRect, claspPaint);
+
+    final dotPaint = Paint()
+      ..color = const Color(0xFFFDE047)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(const Offset(3, -4), 2.5, dotPaint);
+
+    canvas.restore(); // Restore angle transform
+
+    // 6. Top Right Golden Coin
+    final coinPaint1 = Paint()
+      ..color = const Color(0xFFFFB800)
+      ..style = PaintingStyle.fill;
+    final coinBorderPaint = Paint()
+      ..color = const Color(0xFFF59E0B)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+
+    final coin1Center = Offset(size.width * 0.76, size.height * 0.32);
+    canvas.drawCircle(coin1Center, 13, coinPaint1);
+    canvas.drawCircle(coin1Center, 10, coinBorderPaint);
+
+    // 7. Bottom Right Golden Coin
+    final coin2Center = Offset(size.width * 0.74, size.height * 0.62);
+    canvas.drawCircle(coin2Center, 14, coinPaint1);
+    canvas.drawCircle(coin2Center, 11, coinBorderPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+

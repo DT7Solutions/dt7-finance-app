@@ -2,19 +2,27 @@ import 'package:flutter/material.dart';
 import '../models/expense_model.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_drawer.dart';
+import '../widgets/app_header_icon_button.dart';
 import '../widgets/status_badge.dart';
+import '03_dashboard_screen.dart';
 import '09_expense_detail_screen.dart';
 
 class MyExpensesScreen extends StatefulWidget {
-  const MyExpensesScreen({Key? key}) : super(key: key);
+  final VoidCallback? onBackPressed;
+
+  const MyExpensesScreen({super.key, this.onBackPressed});
 
   @override
   State<MyExpensesScreen> createState() => _MyExpensesScreenState();
 }
 
 class _MyExpensesScreenState extends State<MyExpensesScreen> {
-  String _selectedFilter = 'All';
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   List<ExpenseModel> _expenses = [];
+  String _selectedFilter = 'All';
+  String _categoryFilter = 'All';
+  String _statusFilter = 'All';
 
   @override
   void initState() {
@@ -26,30 +34,353 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
     final list = await ApiService.getExpenses();
     if (mounted) {
       setState(() {
-        _expenses = list;
+        _expenses = list.isNotEmpty
+            ? list
+            : [
+                ExpenseModel(id: 1, title: 'Travel to Client', amount: 500, categoryName: 'Travel', dateTime: '04 Aug 2026, 02:30 PM', status: 'APPROVED'),
+                ExpenseModel(id: 2, title: 'Lunch with Team', amount: 200, categoryName: 'Food', dateTime: '04 Aug 2026, 01:15 PM', status: 'APPROVED'),
+                ExpenseModel(id: 3, title: 'Fuel Expense', amount: 1000, categoryName: 'Fuel', dateTime: '03 Aug 2026, 05:45 PM', status: 'APPROVED'),
+                ExpenseModel(id: 4, title: 'Office Supplies', amount: 1200, categoryName: 'Office', dateTime: '02 Aug 2026, 11:30 AM', status: 'PENDING'),
+                ExpenseModel(id: 5, title: 'Internet Bill', amount: 600, categoryName: 'Office', dateTime: '01 Aug 2026, 09:00 AM', status: 'APPROVED'),
+              ];
       });
     }
   }
 
+  void _showEditExpenseSheet(BuildContext context, ExpenseModel exp) {
+    final titleController = TextEditingController(text: exp.title);
+    final amountController = TextEditingController(text: exp.amount.toStringAsFixed(0));
+    String selectedCategory = exp.categoryName;
+    final categories = ['Travel', 'Food', 'Fuel', 'Office', 'Misc'];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 20.0,
+                  right: 20.0,
+                  top: 16.0,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 16.0,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Edit Expense',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: titleController,
+                        decoration: InputDecoration(
+                          labelText: 'Title',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: amountController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: 'Amount (₹)',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      const Text('Category:', style: TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        children: categories.map((cat) {
+                          final isSel = selectedCategory == cat;
+                          return ChoiceChip(
+                            label: Text(cat),
+                            selected: isSel,
+                            selectedColor: AppColors.primaryLight,
+                            labelStyle: TextStyle(
+                              color: isSel ? AppColors.primary : Colors.black87,
+                              fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                            ),
+                            onSelected: (val) {
+                              setSheetState(() => selectedCategory = cat);
+                            },
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: () {
+                            final newAmount = double.tryParse(amountController.text) ?? exp.amount;
+                            final newTitle = titleController.text.trim().isEmpty ? exp.title : titleController.text.trim();
+                            setState(() {
+                              final idx = _expenses.indexWhere((e) => e.id == exp.id);
+                              if (idx != -1) {
+                                _expenses[idx] = ExpenseModel(
+                                  id: exp.id,
+                                  title: newTitle,
+                                  amount: newAmount,
+                                  categoryName: selectedCategory,
+                                  dateTime: exp.dateTime,
+                                  status: exp.status,
+                                  description: exp.description,
+                                  userName: exp.userName,
+                                  paymentMode: exp.paymentMode,
+                                );
+                              }
+                            });
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Expense updated successfully!'),
+                                backgroundColor: AppColors.primary,
+                              ),
+                            );
+                          },
+                          child: const Text('Save Changes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showDeleteConfirmationDialog(BuildContext context, ExpenseModel exp) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.delete_forever_rounded, color: Colors.redAccent, size: 24),
+            ),
+            const SizedBox(width: 12),
+            const Text('Delete Expense', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete "${exp.title}"? This action cannot be undone.',
+          style: TextStyle(color: Colors.grey.shade700, fontSize: 14),
+        ),
+        actions: [
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.black87)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await ApiService.deleteExpense(exp.id);
+              setState(() {
+                _expenses.removeWhere((e) => e.id == exp.id);
+              });
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Expense deleted successfully!'),
+                    backgroundColor: Colors.redAccent,
+                  ),
+                );
+              }
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showFilterSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 20.0,
+                  right: 20.0,
+                  top: 16.0,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 16.0,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Filter Expenses',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      const Text('Category:', style: TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        children: ['All', 'Travel', 'Food', 'Fuel', 'Office'].map((cat) {
+                          final isSel = _categoryFilter == cat;
+                          return ChoiceChip(
+                            label: Text(cat),
+                            selected: isSel,
+                            selectedColor: AppColors.primaryLight,
+                            labelStyle: TextStyle(
+                              color: isSel ? AppColors.primary : Colors.black87,
+                              fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                            ),
+                            onSelected: (val) {
+                              setSheetState(() => _categoryFilter = cat);
+                              setState(() => _categoryFilter = cat);
+                            },
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text('Status:', style: TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        children: ['All', 'APPROVED', 'PENDING', 'REJECTED'].map((st) {
+                          final isSel = _statusFilter == st;
+                          return ChoiceChip(
+                            label: Text(st),
+                            selected: isSel,
+                            selectedColor: AppColors.primaryLight,
+                            labelStyle: TextStyle(
+                              color: isSel ? AppColors.primary : Colors.black87,
+                              fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                            ),
+                            onSelected: (val) {
+                              setSheetState(() => _statusFilter = st);
+                              setState(() => _statusFilter = st);
+                            },
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Apply Filter', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final displayList = _expenses.isNotEmpty
-        ? _expenses
-        : [
-            ExpenseModel(id: 1, title: 'Travel to Client', amount: 500, categoryName: 'Travel', dateTime: '04 Aug 2026, 02:30 PM', status: 'APPROVED'),
-            ExpenseModel(id: 2, title: 'Lunch with Team', amount: 200, categoryName: 'Food', dateTime: '04 Aug 2026, 01:15 PM', status: 'APPROVED'),
-            ExpenseModel(id: 3, title: 'Fuel Expense', amount: 1000, categoryName: 'Fuel', dateTime: '03 Aug 2026, 05:45 PM', status: 'APPROVED'),
-            ExpenseModel(id: 4, title: 'Office Supplies', amount: 1200, categoryName: 'Office', dateTime: '02 Aug 2026, 11:30 AM', status: 'PENDING'),
-            ExpenseModel(id: 5, title: 'Internet Bill', amount: 600, categoryName: 'Office', dateTime: '01 Aug 2026, 09:00 AM', status: 'APPROVED'),
-          ];
+    var rawList = _expenses;
 
+    if (_categoryFilter != 'All') {
+      rawList = rawList.where((e) => e.categoryName.toLowerCase() == _categoryFilter.toLowerCase()).toList();
+    }
+    if (_statusFilter != 'All') {
+      rawList = rawList.where((e) => e.status.toUpperCase() == _statusFilter.toUpperCase()).toList();
+    }
+
+    final displayList = rawList;
     final filters = ['All', 'This Month', 'This Week', 'Custom'];
 
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: const AppDrawer(currentRoute: 'expenses'),
       appBar: AppBar(
         title: const Text('My Expenses'),
-        leading: IconButton(icon: const Icon(Icons.menu), onPressed: () {}),
-        actions: [IconButton(icon: const Icon(Icons.tune), onPressed: () {})],
+        leading: AppHeaderIconButton(
+          icon: Icons.arrow_back,
+          onPressed: () {
+            if (widget.onBackPressed != null) {
+              widget.onBackPressed!();
+            } else if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            } else {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const FounderDashboardScreen()),
+                (route) => false,
+              );
+            }
+          },
+        ),
+        actions: [
+          AppHeaderIconButton(
+            icon: Icons.tune,
+            onPressed: () => _showFilterSheet(context),
+          ),
+        ],
       ),
       body: SafeArea(
         child: Padding(
@@ -88,53 +419,105 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
 
               // Expense Items List
               Expanded(
-                child: ListView.builder(
-                  itemCount: displayList.length,
-                  itemBuilder: (ctx, idx) {
-                    final exp = displayList[idx];
-                    return InkWell(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => ExpenseDetailScreen(expense: exp)),
-                        );
-                      },
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: Colors.grey.shade100),
+                child: displayList.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No expenses found',
+                          style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
                         ),
-                        child: Column(
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(exp.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(4)),
-                                  child: Text(exp.categoryName, style: TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.bold)),
-                                ),
-                                Text('₹${exp.amount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                              ],
+                      )
+                    : ListView.builder(
+                        itemCount: displayList.length,
+                        itemBuilder: (ctx, idx) {
+                          final exp = displayList[idx];
+                          return InkWell(
+                            onTap: () async {
+                              final res = await Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (context) => ExpenseDetailScreen(expense: exp)),
+                              );
+                              if (res == true) {
+                                setState(() {
+                                  _expenses.removeWhere((e) => e.id == exp.id);
+                                });
+                              }
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: Colors.grey.shade100),
+                              ),
+                              child: Column(
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                exp.title,
+                                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: Colors.orange.shade50,
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: Text(
+                                                exp.categoryName,
+                                                style: TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.bold),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Text(
+                                        '₹${exp.amount.toStringAsFixed(0)}',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(exp.dateTime, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                                      Row(
+                                        children: [
+                                          StatusBadge(status: exp.status),
+                                          const SizedBox(width: 8),
+                                          IconButton(
+                                            icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                                            onPressed: () => _showEditExpenseSheet(context, exp),
+                                            constraints: const BoxConstraints(),
+                                            padding: const EdgeInsets.all(4),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          IconButton(
+                                            icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                                            onPressed: () => _showDeleteConfirmationDialog(context, exp),
+                                            constraints: const BoxConstraints(),
+                                            padding: const EdgeInsets.all(4),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
-                            const SizedBox(height: 6),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(exp.dateTime, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-                                StatusBadge(status: exp.status),
-                              ],
-                            ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ),
             ],
           ),

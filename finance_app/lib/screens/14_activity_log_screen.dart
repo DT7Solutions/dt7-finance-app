@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import '../models/activity_log_model.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_drawer.dart';
+import '../widgets/app_header_icon_button.dart';
+import '03_dashboard_screen.dart';
 
 class ActivityLogScreen extends StatefulWidget {
-  const ActivityLogScreen({Key? key}) : super(key: key);
+  const ActivityLogScreen({super.key});
 
   @override
   State<ActivityLogScreen> createState() => _ActivityLogScreenState();
@@ -12,6 +15,7 @@ class ActivityLogScreen extends StatefulWidget {
 
 class _ActivityLogScreenState extends State<ActivityLogScreen> {
   List<ActivityLogModel> _logs = [];
+  String _activityFilter = 'All';
 
   @override
   void initState() {
@@ -20,30 +24,141 @@ class _ActivityLogScreenState extends State<ActivityLogScreen> {
   }
 
   Future<void> _loadLogs() async {
-    final logs = await ApiService.getActivityLogs();
+    final list = await ApiService.getActivityLogs();
     if (mounted) {
       setState(() {
-        _logs = logs;
+        _logs = list;
       });
     }
   }
 
+  void _showFilterSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 20.0,
+                  right: 20.0,
+                  top: 16.0,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 16.0,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Filter Activity Logs',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      const Text('Activity Type:', style: TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        children: ['All', 'Expense', 'Budget', 'User'].map((type) {
+                          final isSel = _activityFilter == type;
+                          return ChoiceChip(
+                            label: Text(type),
+                            selected: isSel,
+                            selectedColor: AppColors.primaryLight,
+                            labelStyle: TextStyle(
+                              color: isSel ? AppColors.primary : Colors.black87,
+                              fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                            ),
+                            onSelected: (val) {
+                              setSheetState(() => _activityFilter = type);
+                              setState(() => _activityFilter = type);
+                            },
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Apply Filter', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final displayLogs = _logs.isNotEmpty
+    var rawList = _logs.isNotEmpty
         ? _logs
         : [
-            ActivityLogModel(id: 1, userName: 'Admin', title: 'Budget allocated to John Doe', description: '₹10,000 allocated', timestamp: '04 Aug 2026, 10:30 AM'),
-            ActivityLogModel(id: 2, userName: 'John Doe', title: 'Expense added by John Doe', description: 'Fuel Expense - ₹500', timestamp: '04 Aug 2026, 11:15 AM'),
-            ActivityLogModel(id: 3, userName: 'Admin', title: 'Expense approved', description: 'Travel to Client - ₹500', timestamp: '04 Aug 2026, 11:30 AM'),
-            ActivityLogModel(id: 4, userName: 'Admin', title: 'Budget increased for John Doe', description: '₹5,000 added', timestamp: '04 Aug 2026, 12:10 PM'),
+            ActivityLogModel(id: 1, userName: 'John Doe', title: 'Expense submitted for Approval', description: 'John Doe - ₹500', timestamp: '04 Aug 2026, 02:30 PM'),
+            ActivityLogModel(id: 2, userName: 'Admin', title: 'Budget allocated to Rahul', description: 'Admin - ₹20,000', timestamp: '04 Aug 2026, 01:00 PM'),
+            ActivityLogModel(id: 3, userName: 'Rahul Sharma', title: 'Expense approved', description: 'Rahul Sharma - ₹1,000', timestamp: '04 Aug 2026, 12:45 PM'),
+            ActivityLogModel(id: 4, userName: 'Admin', title: 'New user added', description: 'Admin added Neha Singh', timestamp: '04 Aug 2026, 12:30 PM'),
             ActivityLogModel(id: 5, userName: 'John Doe', title: 'Budget request submitted', description: 'John Doe - ₹5,000', timestamp: '04 Aug 2026, 12:20 PM'),
           ];
 
+    if (_activityFilter != 'All') {
+      rawList = rawList.where((log) =>
+        log.title.toLowerCase().contains(_activityFilter.toLowerCase()) ||
+        log.description.toLowerCase().contains(_activityFilter.toLowerCase())
+      ).toList();
+    }
+
+    final displayLogs = rawList;
+
     return Scaffold(
+      drawer: const AppDrawer(currentRoute: 'activity'),
       appBar: AppBar(
         title: const Text('Activity Log'),
-        actions: [IconButton(icon: const Icon(Icons.tune), onPressed: () {})],
+        leading: AppHeaderIconButton(
+          icon: Icons.arrow_back,
+          onPressed: () {
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            } else {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const FounderDashboardScreen()),
+              );
+            }
+          },
+        ),
+        actions: [
+          AppHeaderIconButton(
+            icon: Icons.tune,
+            onPressed: () => _showFilterSheet(context),
+          ),
+        ],
       ),
       body: SafeArea(
         child: Padding(

@@ -1,41 +1,76 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../theme/app_theme.dart';
+import 'package:intl/intl.dart';
 
 class DonutChartWidget extends StatelessWidget {
   final double totalExpenses;
+  final List<Map<String, dynamic>>? customCategories;
 
-  const DonutChartWidget({Key? key, required this.totalExpenses}) : super(key: key);
+  const DonutChartWidget({
+    super.key,
+    required this.totalExpenses,
+    this.customCategories,
+  });
+
+  String _formatCurrency(double amount) {
+    final formatter = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+    return formatter.format(amount);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final categories = [
-      {'name': 'Travel', 'pct': 40, 'color': const Color(0xFF3B82F6)},
-      {'name': 'Food', 'pct': 20, 'color': const Color(0xFF10B981)},
-      {'name': 'Fuel', 'pct': 15, 'color': const Color(0xFFF59E0B)},
-      {'name': 'Office', 'pct': 10, 'color': AppColors.primary},
-      {'name': 'Others', 'pct': 15, 'color': const Color(0xFF8B5CF6)},
+    final defaultCategories = [
+      {
+        'name': 'Travel',
+        'pct': 35,
+        'color': const Color(0xFFFF5500), // Vibrant Orange
+      },
+      {
+        'name': 'Food',
+        'pct': 25,
+        'color': const Color(0xFFF59E0B), // Warm Amber
+      },
+      {
+        'name': 'Fuel',
+        'pct': 18,
+        'color': const Color(0xFF2563EB), // Royal Blue
+      },
+      {
+        'name': 'Office',
+        'pct': 12,
+        'color': const Color(0xFF10B981), // Emerald Green
+      },
+      {
+        'name': 'Others',
+        'pct': 10,
+        'color': const Color(0xFF8B5CF6), // Purple
+      },
     ];
 
+    final categories = customCategories ?? defaultCategories;
+
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         // Donut Chart Container
         SizedBox(
-          height: 140,
-          width: 140,
+          height: 150,
+          width: 150,
           child: Stack(
             alignment: Alignment.center,
             children: [
               PieChart(
                 PieChartData(
-                  sectionsSpace: 2,
-                  centerSpaceRadius: 42,
+                  sectionsSpace: 3,
+                  centerSpaceRadius: 46,
+                  startDegreeOffset: 270,
                   sections: categories.map((cat) {
+                    final catColor = cat['color'] as Color;
                     return PieChartSectionData(
-                      color: cat['color'] as Color,
-                      value: (cat['pct'] as int).toDouble(),
+                      color: catColor,
+                      value: (cat['pct'] as num).toDouble(),
                       title: '',
-                      radius: 20,
+                      radius: 22,
                     );
                   }).toList(),
                 ),
@@ -44,12 +79,21 @@ class DonutChartWidget extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    '₹${totalExpenses.toStringAsFixed(0)}',
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    _formatCurrency(totalExpenses),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF111827),
+                    ),
                   ),
-                  const Text(
+                  const SizedBox(height: 2),
+                  Text(
                     'Total Expenses',
-                    style: TextStyle(fontSize: 9, color: Colors.grey),
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey.shade600,
+                    ),
                   ),
                 ],
               ),
@@ -58,23 +102,46 @@ class DonutChartWidget extends StatelessWidget {
         ),
         const SizedBox(width: 24),
 
-        // Legend List
+        // Legend List with Exact Matching Colors
         Expanded(
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: categories.map((cat) {
+              final catColor = cat['color'] as Color;
               return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
+                padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Row(
                       children: [
-                        CircleAvatar(radius: 4, backgroundColor: cat['color'] as Color),
-                        const SizedBox(width: 8),
-                        Text(cat['name'] as String, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: catColor,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          cat['name'] as String,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF374151),
+                          ),
+                        ),
                       ],
                     ),
-                    Text('${cat['pct']}%', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    Text(
+                      '${cat['pct']}%',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
                   ],
                 ),
               );

@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import '../models/category_model.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_header_icon_button.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_text_field.dart';
+import '03_dashboard_screen.dart';
 
 class BudgetRequestScreen extends StatefulWidget {
   const BudgetRequestScreen({Key? key}) : super(key: key);
@@ -66,7 +68,22 @@ class _BudgetRequestScreenState extends State<BudgetRequestScreen> {
     final afterBalance = currentBalance - reqAmount;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Budget Request')),
+      appBar: AppBar(
+        title: const Text('Budget Request'),
+        leading: AppHeaderIconButton(
+          icon: Icons.arrow_back,
+          onPressed: () {
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            } else {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const FounderDashboardScreen()),
+              );
+            }
+          },
+        ),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20.0),

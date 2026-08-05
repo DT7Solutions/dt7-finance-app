@@ -26,6 +26,13 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    precacheImage(const AssetImage('assets/images/founder_avatar.png'), context);
+    precacheImage(const AssetImage('assets/images/logo.png'), context);
+  }
+
+  @override
   void dispose() {
     _animController.dispose();
     super.dispose();
@@ -115,19 +122,24 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                             borderRadius: BorderRadius.circular(16),
                           ),
                         ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                        child: const Stack(
+                          alignment: Alignment.center,
                           children: [
-                            Text(
-                              'Get Started',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.5,
+                            Center(
+                              child: Text(
+                                'Get Started',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
                               ),
                             ),
-                            SizedBox(width: 8),
-                            Icon(Icons.arrow_forward_rounded, size: 20),
+                            Positioned(
+                              right: 16,
+                              child: Icon(Icons.arrow_forward_rounded, size: 20),
+                            ),
                           ],
                         ),
                       ),
