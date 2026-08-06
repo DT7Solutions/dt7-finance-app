@@ -15,11 +15,13 @@ import '../screens/15_profile_screen.dart';
 class AppDrawer extends StatelessWidget {
   final String currentRoute;
   final ValueChanged<int>? onSelectTab;
+  final VoidCallback? onShowBudgetBreakdown;
 
   const AppDrawer({
     super.key,
     this.currentRoute = '',
     this.onSelectTab,
+    this.onShowBudgetBreakdown,
   });
 
   // Fast zero-delay page transition helper
@@ -120,6 +122,22 @@ class AppDrawer extends StatelessWidget {
                       onSelectTab!(2);
                     } else if (currentRoute != 'allocate') {
                       Navigator.push(context, _fastRoute(const AllocateBudgetScreen()));
+                    }
+                  },
+                ),
+                _DrawerTile(
+                  icon: Icons.account_tree_outlined,
+                  title: 'Budget Spending Breakdown',
+                  isSelected: currentRoute == 'breakdown',
+                  onTap: () {
+                    Navigator.pop(context);
+                    if (onShowBudgetBreakdown != null) {
+                      onShowBudgetBreakdown!();
+                    } else {
+                      Navigator.push(
+                        context,
+                        _fastRoute(const FounderDashboardScreen(showBreakdownOnLoad: true)),
+                      );
                     }
                   },
                 ),

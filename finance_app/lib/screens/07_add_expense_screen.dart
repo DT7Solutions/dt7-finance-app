@@ -17,9 +17,9 @@ class AddExpenseScreen extends StatefulWidget {
 }
 
 class _AddExpenseScreenState extends State<AddExpenseScreen> {
-  final _titleController = TextEditingController(text: 'Fuel for Office Visit');
-  final _amountController = TextEditingController(text: '1200');
-  final _descriptionController = TextEditingController(text: 'Fuel filled for office visit to client location.');
+  final _titleController = TextEditingController();
+  final _amountController = TextEditingController();
+  final _descriptionController = TextEditingController();
 
   DateTime _selectedDateTime = DateTime.now();
   int? _selectedCategoryId = 3;

@@ -51,4 +51,27 @@ class UserModel {
   }
 
   bool get isAdmin => role == 'ADMIN';
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'username': username,
+      'email': email,
+      'first_name': firstName,
+      'last_name': lastName,
+      'role': role,
+      'department': department,
+      'employee_id': employeeId,
+      'phone': phone,
+      'allocated_amount': allocatedAmount,
+      'used_amount': usedAmount,
+      'remaining_amount': remainingAmount,
+      'profile': {
+        'role': role,
+        'department': department,
+        'employee_id': employeeId,
+        'phone': phone,
+      },
+    };
+  }
 }

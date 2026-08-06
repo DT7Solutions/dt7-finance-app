@@ -143,15 +143,7 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    var rawList = _history.isNotEmpty
-        ? _history
-        : [
-            ExpenseModel(id: 1, title: 'Travel to Client', amount: 500, categoryName: 'Travel', dateTime: '04 Aug 2026', status: 'APPROVED'),
-            ExpenseModel(id: 2, title: 'Lunch with Team', amount: 200, categoryName: 'Food', dateTime: '04 Aug 2026', status: 'APPROVED'),
-            ExpenseModel(id: 3, title: 'Fuel Expense', amount: 1000, categoryName: 'Fuel', dateTime: '03 Aug 2026', status: 'APPROVED'),
-            ExpenseModel(id: 4, title: 'Office Supplies', amount: 1200, categoryName: 'Office', dateTime: '02 Aug 2026', status: 'PENDING'),
-            ExpenseModel(id: 5, title: 'Internet Bill', amount: 600, categoryName: 'Office', dateTime: '01 Aug 2026', status: 'APPROVED'),
-          ];
+    var rawList = List<ExpenseModel>.from(_history);
 
     if (_categoryFilter != 'All') {
       rawList = rawList.where((e) => e.categoryName.toLowerCase() == _categoryFilter.toLowerCase()).toList();

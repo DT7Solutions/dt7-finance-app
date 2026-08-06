@@ -14,17 +14,6 @@ class AuthService {
     'http://localhost:8000/api/v1',
   ];
 
-  static final Map<String, Map<String, String>> _dynamicUsers = {};
-
-  static void registerDynamicUser(String username, String email, String password, {String role = 'EMPLOYEE'}) {
-    final lowerUname = username.trim().toLowerCase();
-    final lowerEmail = email.trim().toLowerCase();
-    final creds = {'password': password.trim(), 'role': role};
-
-    if (lowerUname.isNotEmpty) _dynamicUsers[lowerUname] = creds;
-    if (lowerEmail.isNotEmpty) _dynamicUsers[lowerEmail] = creds;
-  }
-
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('jwt_access_token');
@@ -77,160 +66,78 @@ class AuthService {
   /// Strict Credential Verification & Role-Based Authentication
   static Future<String?> authenticateUser(String identifier, String password) async {
     final String cleanInput = identifier.trim();
-    final String lowerId = cleanInput.toLowerCase();
     final String cleanPassword = password.trim();
 
     if (cleanInput.isEmpty || cleanPassword.isEmpty) {
       return null;
     }
 
-    // 1. Try real HTTP backend token endpoints across candidate URLs
-    final candidateUsernames = [
-      if (lowerId == 'admin@gmail.com') 'admin',
-      if (lowerId == 'founder@dt7.agency') 'founder',
-      if (lowerId == 'diya@gmail.com') 'diya',
-      if (lowerId == 'paul@gmail.com') 'paul',
-      if (lowerId == 'dinesh@gmail.com') 'dinesh',
-      lowerId.contains('@') ? lowerId.split('@').first : lowerId,
-      lowerId,
+    final payloads = [
+      {'username': cleanInput, 'password': cleanPassword},
+      if (cleanInput.contains('@')) {'email': cleanInput, 'password': cleanPassword},
     ];
 
     final endpoints = ['/auth/token/', '/token/'];
 
     for (final hostUrl in candidateBaseUrls) {
       for (final endpoint in endpoints) {
-        for (final uname in candidateUsernames.toSet()) {
-          final payloads = [
-            {'username': uname, 'password': cleanPassword},
-            if (cleanInput.contains('@')) {'email': cleanInput, 'password': cleanPassword},
-            {'username': cleanInput, 'password': cleanPassword},
-          ];
+        for (final payload in payloads) {
+          try {
+            final url = Uri.parse('$hostUrl$endpoint');
+            final response = await http.post(
+              url,
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode(payload),
+            ).timeout(const Duration(milliseconds: 3500));
 
-          for (final payload in payloads) {
-            try {
-              final url = Uri.parse('$hostUrl$endpoint');
-              var response = await http.post(
-                url,
-                headers: {'Content-Type': 'application/json'},
-                body: jsonEncode(payload),
-              ).timeout(const Duration(milliseconds: 3500));
+            if (response.statusCode == 200 || response.statusCode == 201) {
+              baseUrl = hostUrl;
+              final data = jsonDecode(response.body);
+              if (data is Map<String, dynamic>) {
+                final access = data['access'] ?? data['token'] ?? data['access_token'];
+                final refresh = data['refresh'] ?? data['refresh_token'] ?? '';
+                if (access != null) {
+                  await saveToken(access.toString(), refresh.toString());
+                  await saveCurrentUsername(cleanInput);
 
-              // If 401 Unauthorized, attempt auto-creating the account on backend and retrying
-              if (response.statusCode == 401 || response.statusCode == 400) {
-                final regEndpoints = ['/users/', '/auth/register/', '/register/'];
-                for (final regEp in regEndpoints) {
-                  try {
-                    await http.post(
-                      Uri.parse('$hostUrl$regEp'),
-                      headers: {'Content-Type': 'application/json'},
-                      body: jsonEncode({
-                        'username': uname,
-                        'email': cleanInput.contains('@') ? cleanInput : '$uname@gmail.com',
-                        'password': cleanPassword,
-                        'first_name': uname,
-                        'last_name': 'User',
-                      }),
-                    ).timeout(const Duration(milliseconds: 2500));
-                  } catch (_) {}
-                }
+                  final userMap = data['user'] is Map ? data['user'] : {};
+                  final profileMap = data['profile'] is Map ? data['profile'] : (userMap['profile'] is Map ? userMap['profile'] : {});
 
-                // Retry token request after auto-registration attempt
-                response = await http.post(
-                  url,
-                  headers: {'Content-Type': 'application/json'},
-                  body: jsonEncode(payload),
-                ).timeout(const Duration(milliseconds: 3500));
-              }
+                  final isSuper = data['is_superuser'] == true ||
+                      data['is_staff'] == true ||
+                      data['is_admin'] == true ||
+                      userMap['is_superuser'] == true ||
+                      userMap['is_staff'] == true ||
+                      userMap['is_admin'] == true;
 
-              if (response.statusCode == 200 || response.statusCode == 201) {
-                baseUrl = hostUrl;
-                final data = jsonDecode(response.body);
-                if (data is Map<String, dynamic>) {
-                  final access = data['access'] ?? data['token'] ?? data['access_token'];
-                  final refresh = data['refresh'] ?? data['refresh_token'] ?? '';
-                  if (access != null) {
-                    await saveToken(access.toString(), refresh.toString());
+                  final rawRole = (data['role'] ?? data['user_type'] ?? userMap['role'] ?? userMap['user_type'] ?? profileMap['role'] ?? '')
+                      .toString()
+                      .toUpperCase();
 
-                    final isSuper = data['is_superuser'] == true || data['is_staff'] == true || data['is_admin'] == true;
-                    final rawRole = (data['role'] ?? data['user_type'] ?? '').toString().toUpperCase();
-                    final lowerUname = uname.toLowerCase();
+                  final currentUser = await ApiService.getCurrentUser();
 
-                    String role = 'EMPLOYEE';
-                    if (isSuper ||
-                        rawRole.contains('FOUNDER') ||
-                        rawRole.contains('ADMIN') ||
-                        rawRole.contains('SUPERUSER') ||
-                        lowerUname == 'admin' ||
-                        lowerUname == 'founder' ||
-                        lowerUname == 'diya' ||
-                        lowerUname == 'dinesh') {
-                      role = 'FOUNDER';
-                    } else {
-                      role = 'EMPLOYEE';
-                    }
-
-                    await saveUserRole(role);
-                    await saveCurrentUsername(cleanInput);
-                    return role;
+                  String role = 'EMPLOYEE';
+                  if (isSuper ||
+                      rawRole.contains('FOUNDER') ||
+                      rawRole.contains('ADMIN') ||
+                      rawRole.contains('SUPERUSER') ||
+                      (currentUser != null && (currentUser.isAdmin || currentUser.role == 'ADMIN' || currentUser.role == 'FOUNDER'))) {
+                    role = 'FOUNDER';
+                  } else {
+                    role = 'EMPLOYEE';
                   }
+
+                  await saveUserRole(role);
+                  return role;
                 }
               }
-            } catch (_) {}
-          }
+            }
+          } catch (_) {}
         }
       }
     }
 
-    // 2. Strict Local Database Users Authentication (REJECTS WRONG PASSWORDS & INVALID USERS)
-    final dynUser = _dynamicUsers[lowerId];
-    if (dynUser != null && dynUser['password'] == cleanPassword) {
-      final role = dynUser['role'] ?? 'EMPLOYEE';
-      final isFounder = role == 'FOUNDER' || role == 'ADMIN';
-      await saveToken(isFounder ? 'jwt_access_token_founder' : 'jwt_access_token_employee', 'mock_refresh_token');
-      await saveUserRole(isFounder ? 'FOUNDER' : 'EMPLOYEE');
-      await saveCurrentUsername(cleanInput);
-      return isFounder ? 'FOUNDER' : 'EMPLOYEE';
-    }
-
-    final matchingUser = ApiService.storedUsers.firstWhere(
-      (u) => u.username.toLowerCase() == lowerId || u.email.toLowerCase() == lowerId,
-      orElse: () => UserModel(id: -1, username: '', email: '', firstName: '', lastName: ''),
-    );
-
-    if (matchingUser.id != -1 && (cleanPassword == '123456' || cleanPassword == 'password123')) {
-      final isFounder = matchingUser.isAdmin || matchingUser.role == 'FOUNDER' || matchingUser.role == 'ADMIN';
-      final roleStr = isFounder ? 'FOUNDER' : 'EMPLOYEE';
-      await saveToken(isFounder ? 'jwt_access_token_founder' : 'jwt_access_token_employee', 'mock_refresh_token');
-      await saveUserRole(roleStr);
-      await saveCurrentUsername(cleanInput);
-      return roleStr;
-    }
-
-    final isFounderUser = (lowerId == 'admin' || lowerId == 'admin@gmail.com' ||
-                           lowerId == 'founder' || lowerId == 'founder@dt7.agency' ||
-                           lowerId == 'diya' || lowerId == 'diya@gmail.com' ||
-                           lowerId == 'dinesh' || lowerId == 'dinesh@gmail.com') &&
-                          (cleanPassword == '123456' || cleanPassword == 'password123');
-
-    final isEmployeeUser = (lowerId == 'paul' || lowerId == 'paul@gmail.com' ||
-                            lowerId == 'riya' || lowerId == 'riya@gmail.com') &&
-                           (cleanPassword == '123456' || cleanPassword == 'password123');
-
-    if (isFounderUser) {
-      await saveToken('jwt_access_token_founder', 'mock_refresh_token');
-      await saveUserRole('FOUNDER');
-      await saveCurrentUsername(cleanInput);
-      return 'FOUNDER';
-    }
-
-    if (isEmployeeUser) {
-      await saveToken('jwt_access_token_employee', 'mock_refresh_token');
-      await saveUserRole('EMPLOYEE');
-      await saveCurrentUsername(cleanInput);
-      return 'EMPLOYEE';
-    }
-
-    // Wrong Password / Invalid User -> Deny Access (Return null)
+    // Backend API rejected credentials or was unreachable -> Access Denied
     return null;
   }
 

@@ -15,35 +15,78 @@ class ApprovalsScreen extends StatefulWidget {
 
 class _ApprovalsScreenState extends State<ApprovalsScreen> {
   String _selectedTab = 'Pending';
+  bool _isLoading = true;
 
-  final List<Map<String, dynamic>> _pendingApprovals = [
-    {'id': 1, 'title': 'Travel to Client', 'category': 'Travel', 'user': 'John Doe', 'date': '04 Aug 2026', 'amount': 2500.0},
-    {'id': 2, 'title': 'Hotel Booking', 'category': 'Travel', 'user': 'Priya Patel', 'date': '03 Aug 2026', 'amount': 4200.0},
-    {'id': 3, 'title': 'Office Supplies', 'category': 'Office', 'user': 'Amit Verma', 'date': '03 Aug 2026', 'amount': 1200.0},
-  ];
+  List<Map<String, dynamic>> _pendingApprovals = [];
+  List<Map<String, dynamic>> _approvedApprovals = [];
+  List<Map<String, dynamic>> _rejectedApprovals = [];
 
-  final List<Map<String, dynamic>> _approvedApprovals = [
-    {'id': 101, 'title': 'Software Subscription', 'category': 'Office', 'user': 'Neha Singh', 'date': '02 Aug 2026', 'amount': 1500.0},
-    {'id': 102, 'title': 'Team Lunch', 'category': 'Food', 'user': 'Rahul Sharma', 'date': '01 Aug 2026', 'amount': 3200.0},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadApprovals();
+  }
 
-  final List<Map<String, dynamic>> _rejectedApprovals = [
-    {'id': 201, 'title': 'Luxury Taxi Service', 'category': 'Travel', 'user': 'John Doe', 'date': '31 Jul 2026', 'amount': 8500.0},
-  ];
+  Future<void> _loadApprovals() async {
+    final expenses = await ApiService.getExpenses();
+    if (mounted) {
+      setState(() {
+        _pendingApprovals = expenses
+            .where((e) => e.isPending)
+            .map((e) => {
+                  'id': e.id,
+                  'title': e.title,
+                  'category': e.categoryName,
+                  'user': e.userName,
+                  'date': e.dateTime,
+                  'amount': e.amount,
+                })
+            .toList();
+
+        _approvedApprovals = expenses
+            .where((e) => e.isApproved)
+            .map((e) => {
+                  'id': e.id,
+                  'title': e.title,
+                  'category': e.categoryName,
+                  'user': e.userName,
+                  'date': e.dateTime,
+                  'amount': e.amount,
+                })
+            .toList();
+
+        _rejectedApprovals = expenses
+            .where((e) => e.isRejected)
+            .map((e) => {
+                  'id': e.id,
+                  'title': e.title,
+                  'category': e.categoryName,
+                  'user': e.userName,
+                  'date': e.dateTime,
+                  'amount': e.amount,
+                })
+            .toList();
+        _isLoading = false;
+      });
+    }
+  }
 
   Future<void> _handleAction(int id, String action) async {
-    ApiService.submitApprovalAction(id, 'expense', action);
-
-    final idx = _pendingApprovals.indexWhere((item) => item['id'] == id);
-    if (idx != -1) {
-      final item = Map<String, dynamic>.from(_pendingApprovals.removeAt(idx));
-      if (action == 'approve') {
-        _approvedApprovals.insert(0, item);
-      } else {
-        _rejectedApprovals.insert(0, item);
-      }
-      setState(() {});
+    final expenses = await ApiService.getExpenses();
+    final expIdx = expenses.indexWhere((e) => e.id == id);
+    if (expIdx != -1) {
+      final exp = expenses[expIdx];
+      await ApiService.updateExpense(
+        id: exp.id,
+        title: exp.title,
+        amount: exp.amount,
+        categoryName: exp.categoryName,
+        status: action == 'approve' ? 'APPROVED' : 'REJECTED',
+      );
+    } else {
+      await ApiService.submitApprovalAction(id, 'expense', action);
     }
+    await _loadApprovals();
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

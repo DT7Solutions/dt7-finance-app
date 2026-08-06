@@ -44,6 +44,23 @@ class ExpenseModel {
     );
   }
 
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'amount': amount,
+      'category': categoryId,
+      'category_name': categoryName,
+      'category_color': categoryColor,
+      'user_name': userName,
+      'description': description,
+      'date_time': dateTime,
+      'status': status,
+      'payment_mode': paymentMode,
+      'receipt_image': receiptImage,
+    };
+  }
+
   bool get isApproved => status == 'APPROVED';
   bool get isPending => status == 'PENDING';
   bool get isRejected => status == 'REJECTED';

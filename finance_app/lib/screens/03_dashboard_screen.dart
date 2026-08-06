@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../models/user_model.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
@@ -18,7 +19,9 @@ import '14_activity_log_screen.dart';
 import '15_profile_screen.dart';
 
 class FounderDashboardScreen extends StatefulWidget {
-  const FounderDashboardScreen({super.key});
+  final bool showBreakdownOnLoad;
+
+  const FounderDashboardScreen({super.key, this.showBreakdownOnLoad = false});
 
   @override
   State<FounderDashboardScreen> createState() => _FounderDashboardScreenState();
@@ -31,40 +34,18 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
   Map<String, dynamic>? _dashboardData;
   bool _isLoading = false;
 
-  final List<Map<String, dynamic>> _notifications = [
-    {
-      'id': 1,
-      'title': 'Over Budget Alert',
-      'message': '2 departments have exceeded their monthly allocated budget limits.',
-      'time': '10m ago',
-      'type': 'warning',
-      'isRead': false,
-    },
-    {
-      'id': 2,
-      'title': 'Pending Expense Request',
-      'message': 'Travel expense of ₹15,000 submitted for review.',
-      'time': '45m ago',
-      'type': 'expense',
-      'isRead': false,
-    },
-    {
-      'id': 3,
-      'title': 'New User Onboarded',
-      'message': 'Rahul Sharma joined the Finance team.',
-      'time': '2h ago',
-      'type': 'user',
-      'isRead': false,
-    },
-    {
-      'id': 4,
-      'title': 'Monthly Allocation Deployed',
-      'message': 'Total ₹1,50,000 allocated for current cycle.',
-      'time': '1d ago',
-      'type': 'info',
-      'isRead': true,
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadDashboard();
+    if (widget.showBreakdownOnLoad) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showBudgetSpendingBreakdownModal(context);
+      });
+    }
+  }
+
+  final List<Map<String, dynamic>> _notifications = [];
 
   int get _unreadCount => _notifications.where((n) => !n['isRead']).length;
 
@@ -286,12 +267,6 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
     );
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _loadDashboard();
-  }
-
   Future<void> _loadDashboard() async {
     final data = await ApiService.getFounderDashboard();
     if (mounted && data != null) {
@@ -302,8 +277,11 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
   }
 
   String _formatCurrency(double amount) {
+    final isNegative = amount < 0;
+    final absAmount = amount.abs();
     final formatter = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
-    return formatter.format(amount);
+    final formatted = formatter.format(absAmount);
+    return isNegative ? '- $formatted' : formatted;
   }
 
   void _showAddUserModal(BuildContext context) {
@@ -440,12 +418,317 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
     );
   }
 
+  void _showBudgetSpendingBreakdownModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        String filterMode = 'All';
+
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.85,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(top: 12, bottom: 8),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Budget Spending Breakdown',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1F2937),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Who spent the budget & who spent over budget',
+                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: FutureBuilder<List<UserModel>>(
+                      future: ApiService.getUsers(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        final users = snapshot.data ?? [];
+                        final overBudgetUsers = users.where((u) => u.usedAmount > u.allocatedAmount && u.allocatedAmount > 0).toList();
+                        final displayUsers = filterMode == 'OverBudget' ? overBudgetUsers : users;
+
+                        return Column(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                              child: Row(
+                                children: [
+                                  ChoiceChip(
+                                    label: Text('All Users (${users.length})'),
+                                    selected: filterMode == 'All',
+                                    selectedColor: AppColors.primaryLight,
+                                    labelStyle: TextStyle(
+                                      color: filterMode == 'All' ? AppColors.primary : Colors.black87,
+                                      fontWeight: filterMode == 'All' ? FontWeight.bold : FontWeight.normal,
+                                    ),
+                                    onSelected: (_) => setModalState(() => filterMode = 'All'),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  ChoiceChip(
+                                    label: Text('Over Budget (${overBudgetUsers.length})'),
+                                    selected: filterMode == 'OverBudget',
+                                    selectedColor: const Color(0xFFFEF2F2),
+                                    labelStyle: TextStyle(
+                                      color: filterMode == 'OverBudget' ? const Color(0xFFEF4444) : Colors.black87,
+                                      fontWeight: filterMode == 'OverBudget' ? FontWeight.bold : FontWeight.normal,
+                                    ),
+                                    avatar: overBudgetUsers.isNotEmpty
+                                        ? const Icon(Icons.warning_amber_rounded, size: 16, color: Color(0xFFEF4444))
+                                        : null,
+                                    onSelected: (_) => setModalState(() => filterMode = 'OverBudget'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Expanded(
+                              child: displayUsers.isEmpty
+                                  ? Center(
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            filterMode == 'OverBudget' ? Icons.check_circle_outline : Icons.people_outline,
+                                            size: 48,
+                                            color: filterMode == 'OverBudget' ? AppColors.approvedGreen : Colors.grey,
+                                          ),
+                                          const SizedBox(height: 12),
+                                          Text(
+                                            filterMode == 'OverBudget' ? 'No users over budget!' : 'No users found',
+                                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            filterMode == 'OverBudget' ? 'All users are within their allocated limits.' : '',
+                                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  : ListView.builder(
+                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                                      itemCount: displayUsers.length,
+                                      itemBuilder: (context, index) {
+                                        final u = displayUsers[index];
+                                        final isOver = u.usedAmount > u.allocatedAmount && u.allocatedAmount > 0;
+                                        final remainingRem = u.allocatedAmount - u.usedAmount;
+                                        final progress = u.allocatedAmount > 0 ? (u.usedAmount / u.allocatedAmount).clamp(0.0, 1.0) : 0.0;
+                                        final percentText = u.allocatedAmount > 0 ? '${((u.usedAmount / u.allocatedAmount) * 100).round()}%' : '0%';
+
+                                        return Card(
+                                          margin: const EdgeInsets.only(bottom: 14),
+                                          elevation: 0.5,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(16),
+                                            side: BorderSide(
+                                              color: isOver ? const Color(0xFFFCA5A5) : Colors.grey.shade200,
+                                              width: isOver ? 1.5 : 1.0,
+                                            ),
+                                          ),
+                                          child: Container(
+                                            padding: const EdgeInsets.all(16),
+                                            decoration: BoxDecoration(
+                                              color: isOver ? const Color(0xFFFFF1F2).withOpacity(0.5) : Colors.white,
+                                              borderRadius: BorderRadius.circular(16),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                  children: [
+                                                    Row(
+                                                      children: [
+                                                        CircleAvatar(
+                                                          radius: 20,
+                                                          backgroundColor: isOver ? const Color(0xFFFEF2F2) : AppColors.primaryLight,
+                                                          child: Text(
+                                                            u.fullName.isNotEmpty ? u.fullName[0].toUpperCase() : 'U',
+                                                            style: TextStyle(
+                                                              fontWeight: FontWeight.bold,
+                                                              color: isOver ? const Color(0xFFEF4444) : AppColors.primary,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        const SizedBox(width: 12),
+                                                        Column(
+                                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                                          children: [
+                                                            Text(
+                                                              u.fullName,
+                                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1F2937)),
+                                                            ),
+                                                            Text(
+                                                              '${u.department} • ${u.employeeId}',
+                                                              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                      decoration: BoxDecoration(
+                                                        color: isOver ? const Color(0xFFFEF2F2) : AppColors.approvedGreen.withOpacity(0.1),
+                                                        borderRadius: BorderRadius.circular(12),
+                                                        border: Border.all(
+                                                          color: isOver ? const Color(0xFFFCA5A5) : AppColors.approvedGreen.withOpacity(0.3),
+                                                        ),
+                                                      ),
+                                                      child: Text(
+                                                        isOver ? '🚨 OVER BUDGET' : 'WITHIN BUDGET',
+                                                        style: TextStyle(
+                                                          fontSize: 10,
+                                                          fontWeight: FontWeight.bold,
+                                                          color: isOver ? const Color(0xFFEF4444) : AppColors.approvedGreen,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 14),
+                                                Row(
+                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                  children: [
+                                                    Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        const Text('Allocated', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                                                        const SizedBox(height: 2),
+                                                        Text('₹${u.allocatedAmount.toStringAsFixed(0)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                                                      ],
+                                                    ),
+                                                    Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.center,
+                                                      children: [
+                                                        const Text('Used Budget', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                                                        const SizedBox(height: 2),
+                                                        Text('₹${u.usedAmount.toStringAsFixed(0)}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: isOver ? const Color(0xFFEF4444) : Colors.black87)),
+                                                      ],
+                                                    ),
+                                                    Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                                      children: [
+                                                        Text(isOver ? 'Deficit' : 'Remaining', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                                                        const SizedBox(height: 2),
+                                                        Text(
+                                                          _formatCurrency(remainingRem),
+                                                          style: TextStyle(
+                                                            fontSize: 13,
+                                                            fontWeight: FontWeight.bold,
+                                                            color: remainingRem < 0 ? const Color(0xFFEF4444) : AppColors.approvedGreen,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 10),
+                                                Row(
+                                                  children: [
+                                                    Expanded(
+                                                      child: ClipRRect(
+                                                        borderRadius: BorderRadius.circular(4),
+                                                        child: LinearProgressIndicator(
+                                                          value: progress,
+                                                          minHeight: 6,
+                                                          backgroundColor: Colors.grey.shade100,
+                                                          valueColor: AlwaysStoppedAnimation<Color>(
+                                                            isOver ? const Color(0xFFEF4444) : (progress > 0.8 ? Colors.orange : AppColors.primary),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Text(percentText, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isOver ? const Color(0xFFEF4444) : Colors.grey.shade700)),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        icon: const Icon(Icons.account_balance_wallet_outlined, color: Colors.white),
+                        label: const Text('Reallocate / Adjust Budget', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          setState(() => _currentIndex = 2);
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildFounderTab() {
-    final remaining = _dashboardData?['remaining_budget'] ?? 53000.0;
-    final allocated = _dashboardData?['total_allocated'] ?? 150000.0;
-    final expenses = _dashboardData?['total_expenses'] ?? 97000.0;
-    final users = _dashboardData?['total_users'] ?? 5;
-    final overBudget = _dashboardData?['over_budget'] ?? 2;
+    final remaining = (_dashboardData?['remaining_budget'] as double?) ?? 0.0;
+    final allocated = (_dashboardData?['total_allocated'] as double?) ?? 0.0;
+    final expenses = (_dashboardData?['total_expenses'] as double?) ?? 0.0;
+    final users = (_dashboardData?['total_users'] as int?) ?? 0;
+    final overBudget = (_dashboardData?['over_budget'] as int?) ?? 0;
+    final isNegative = remaining < 0;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
@@ -540,16 +823,19 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
           ),
           const SizedBox(height: 20),
 
-          // 3. Hero Card - Total Balance (Navigates to Allocate Budget)
+          // 3. Hero Card - Total Balance (Navigates to Budget Spending Breakdown)
           InkWell(
-            onTap: () => setState(() => _currentIndex = 2),
+            onTap: () => _showBudgetSpendingBreakdownModal(context),
             borderRadius: BorderRadius.circular(18),
             child: Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: const Color(0xFFFFF5ED), // Soft peach warm tint
+                color: isNegative ? const Color(0xFFFEF2F2) : const Color(0xFFFFF5ED), // Red tint when negative
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0xFFFFD4C0), width: 1),
+                border: Border.all(
+                  color: isNegative ? const Color(0xFFFCA5A5) : const Color(0xFFFFD4C0),
+                  width: isNegative ? 1.5 : 1.0,
+                ),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -563,26 +849,26 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
-                          color: Colors.grey.shade600,
+                          color: isNegative ? const Color(0xFF991B1B) : Colors.grey.shade600,
                         ),
                       ),
                       const SizedBox(height: 6),
                       Text(
                         _formatCurrency(remaining),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.w900,
-                          color: Color(0xFF111827),
+                          color: isNegative ? const Color(0xFFEF4444) : const Color(0xFF111827),
                           letterSpacing: -0.5,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Remaining Budget',
+                        isNegative ? 'Remaining Budget (Deficit)' : 'Remaining Budget',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
-                          color: Colors.grey.shade600,
+                          color: isNegative ? const Color(0xFFDC2626) : Colors.grey.shade600,
                         ),
                       ),
                     ],
@@ -591,9 +877,12 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: isNegative ? const Color(0xFFFEF2F2) : Colors.white,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFFFFA066), width: 1.5),
+                      border: Border.all(
+                        color: isNegative ? const Color(0xFFEF4444) : const Color(0xFFFFA066),
+                        width: 1.5,
+                      ),
                       boxShadow: const [
                         BoxShadow(
                           color: Color(0x0D000000),
@@ -602,11 +891,13 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                         ),
                       ],
                     ),
-                    child: const Center(
-                      child: StatTrendIcon(
-                        size: 26,
-                        color: Color(0xFFFF5500),
-                      ),
+                    child: Center(
+                      child: isNegative
+                          ? const Icon(Icons.trending_down, size: 26, color: Color(0xFFEF4444))
+                          : const StatTrendIcon(
+                              size: 26,
+                              color: Color(0xFFFF5500),
+                            ),
                     ),
                   ),
                 ],
@@ -662,7 +953,7 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                   iconData: Icons.warning_amber_rounded,
                   iconColor: const Color(0xFFEF4444),
                   iconBgColor: const Color(0xFFFEF2F2),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ApprovalsScreen())),
+                  onTap: () => _showBudgetSpendingBreakdownModal(context),
                 ),
               ),
             ],
@@ -789,6 +1080,7 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
         drawer: AppDrawer(
           currentRoute: _currentRouteName,
           onSelectTab: (idx) => setState(() => _currentIndex = idx),
+          onShowBudgetBreakdown: () => _showBudgetSpendingBreakdownModal(context),
         ),
         floatingActionButton: _currentIndex == 0
             ? FloatingActionButton.extended(

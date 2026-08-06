@@ -17,7 +17,7 @@ class AllocateBudgetScreen extends StatefulWidget {
 }
 
 class _AllocateBudgetScreenState extends State<AllocateBudgetScreen> {
-  final _amountController = TextEditingController(text: '10000');
+  final _amountController = TextEditingController();
   final _noteController = TextEditingController();
   int? _selectedEmployeeId = 1;
   List<UserModel> _users = [];

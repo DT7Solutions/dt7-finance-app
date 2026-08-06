@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_service.dart';
 import '../models/user_model.dart';
 import '../models/expense_model.dart';
@@ -20,81 +21,38 @@ class ApiService {
     };
   }
 
-  // --- USERS MEMORY STORE & BACKEND SYNC ---
-  static final List<UserModel> _storedUsers = [
-    UserModel(
-      id: 1,
-      username: 'admin',
-      email: 'admin@gmail.com',
-      firstName: 'Admin',
-      lastName: 'User',
-      role: 'ADMIN',
-      department: 'Management',
-      employeeId: 'ADM001',
-      allocatedAmount: 50000.0,
-      usedAmount: 12000.0,
-      remainingAmount: 38000.0,
-    ),
-    UserModel(
-      id: 2,
-      username: 'founder',
-      email: 'founder@dt7.agency',
-      firstName: 'Founder',
-      lastName: 'DT7',
-      role: 'ADMIN',
-      department: 'Executive',
-      employeeId: 'FND001',
-      allocatedAmount: 150000.0,
-      usedAmount: 45000.0,
-      remainingAmount: 105000.0,
-    ),
-    UserModel(
-      id: 3,
-      username: 'paul',
-      email: 'paul@gmail.com',
-      firstName: 'Paul',
-      lastName: 'PK',
-      role: 'EMPLOYEE',
-      department: 'Engineering',
-      employeeId: 'DT7EMP002',
-      allocatedAmount: 25000.0,
-      usedAmount: 8500.0,
-      remainingAmount: 16500.0,
-    ),
-    UserModel(
-      id: 4,
-      username: 'dinesh',
-      email: 'dinesh@gmail.com',
-      firstName: 'Dinesh',
-      lastName: 'Badugu',
-      role: 'ADMIN',
-      department: 'Executive',
-      employeeId: 'DT7EMP003',
-      allocatedAmount: 50000.0,
-      usedAmount: 3200.0,
-      remainingAmount: 46800.0,
-    ),
-    UserModel(
-      id: 5,
-      username: 'diya',
-      email: 'diya@gmail.com',
-      firstName: 'Diya',
-      lastName: 'Badugu',
-      role: 'ADMIN',
-      department: 'Management',
-      employeeId: 'DT7EMP004',
-      allocatedAmount: 150000.0,
-      usedAmount: 20000.0,
-      remainingAmount: 130000.0,
-    ),
-  ];
+  // --- USERS PERSISTENCE & BACKEND SYNC ---
+  static final List<UserModel> _storedUsers = [];
+  static bool _usersLoaded = false;
+
+  static Future<void> _saveUsersToPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonList = _storedUsers.map((u) => u.toJson()).toList();
+      await prefs.setString('saved_users', jsonEncode(jsonList));
+    } catch (_) {}
+  }
+
+  static Future<void> _ensureUsersLoaded() async {
+    if (_usersLoaded && _storedUsers.isNotEmpty) return;
+    _usersLoaded = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedStr = prefs.getString('saved_users');
+      if (savedStr != null && savedStr.isNotEmpty) {
+        final List dynamicList = jsonDecode(savedStr);
+        final loaded = dynamicList.map((i) => UserModel.fromJson(Map<String, dynamic>.from(i))).toList();
+        _storedUsers.clear();
+        _storedUsers.addAll(loaded);
+        return;
+      }
+    } catch (_) {}
+  }
 
   static List<UserModel> get storedUsers => List.unmodifiable(_storedUsers);
 
   static Future<List<UserModel>> getUsers() async {
-    if (!(await AuthService.hasRealToken())) {
-      return List.from(_storedUsers);
-    }
+    await _ensureUsersLoaded();
     for (final hostUrl in AuthService.candidateBaseUrls) {
       final url = Uri.parse('$hostUrl/users/');
       try {
@@ -104,9 +62,12 @@ class ApiService {
           final results = data['results'] ?? data;
           if (results is List && results.isNotEmpty) {
             final parsedUsers = (results).map((i) => UserModel.fromJson(i)).toList();
+            final parsedIds = parsedUsers.map((u) => u.id).toSet();
+            final localOnly = _storedUsers.where((u) => !parsedIds.contains(u.id)).toList();
             _storedUsers.clear();
-            _storedUsers.addAll(parsedUsers);
-            return parsedUsers;
+            _storedUsers.addAll([...localOnly, ...parsedUsers]);
+            await _saveUsersToPrefs();
+            return List.from(_storedUsers);
           }
         }
       } catch (_) {}
@@ -123,20 +84,7 @@ class ApiService {
       if (u.email.toLowerCase() == cleanInput || u.username.toLowerCase() == cleanInput) {
         return u;
       }
-      if (cleanInput.contains('dinesh') && (u.username.toLowerCase().contains('dinesh') || u.email.toLowerCase().contains('dinesh'))) {
-        return u;
-      }
-      if (cleanInput.contains('paul') && (u.username.toLowerCase().contains('paul') || u.email.toLowerCase().contains('paul'))) {
-        return u;
-      }
     }
-
-    try {
-      return users.firstWhere(
-        (u) => u.username.toLowerCase() == 'dinesh' || u.email.toLowerCase() == 'dinesh@gmail.com',
-        orElse: () => users.firstWhere((u) => u.role == 'EMPLOYEE', orElse: () => users.first),
-      );
-    } catch (_) {}
     return users.isNotEmpty ? users.first : null;
   }
 
@@ -150,8 +98,6 @@ class ApiService {
     final nameParts = fullName.split(' ');
     final firstName = nameParts.first;
     final lastName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
-
-    AuthService.registerDynamicUser(username, email, password, role: role);
 
     for (final hostUrl in AuthService.candidateBaseUrls) {
       final url = Uri.parse('$hostUrl/users/');
@@ -184,11 +130,12 @@ class ApiService {
       role: role,
       department: 'Operations',
       employeeId: 'DT7EMP00${_storedUsers.length + 1}',
-      allocatedAmount: 10000.0,
+      allocatedAmount: 0.0,
       usedAmount: 0.0,
-      remainingAmount: 10000.0,
+      remainingAmount: 0.0,
     );
     _storedUsers.add(newUser);
+    await _saveUsersToPrefs();
     return true;
   }
 
@@ -244,8 +191,7 @@ class ApiService {
         remainingAmount: (allocatedAmount - existing.usedAmount).clamp(0, double.infinity),
       );
 
-      final pwd = (password != null && password.trim().isNotEmpty) ? password.trim() : 'password123';
-      AuthService.registerDynamicUser(existing.username, email, pwd, role: role);
+      await _saveUsersToPrefs();
     }
     return true;
   }
@@ -314,14 +260,41 @@ class ApiService {
         usedAmount: existing.usedAmount,
         remainingAmount: amount - existing.usedAmount,
       );
+      await _saveUsersToPrefs();
     }
     return true;
   }
 
   static final List<ExpenseModel> _storedExpenses = [];
+  static bool _expensesLoaded = false;
+
+  static Future<void> _saveExpensesToPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonList = _storedExpenses.map((e) => e.toJson()).toList();
+      await prefs.setString('saved_expenses', jsonEncode(jsonList));
+    } catch (_) {}
+  }
+
+  static Future<void> _ensureExpensesLoaded() async {
+    if (_expensesLoaded && _storedExpenses.isNotEmpty) return;
+    _expensesLoaded = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedStr = prefs.getString('saved_expenses');
+      if (savedStr != null && savedStr.isNotEmpty) {
+        final List dynamicList = jsonDecode(savedStr);
+        final loaded = dynamicList.map((i) => ExpenseModel.fromJson(Map<String, dynamic>.from(i))).toList();
+        _storedExpenses.clear();
+        _storedExpenses.addAll(loaded);
+        return;
+      }
+    } catch (_) {}
+  }
 
   // --- EXPENSES ---
   static Future<List<ExpenseModel>> getExpenses() async {
+    await _ensureExpensesLoaded();
     for (final hostUrl in AuthService.candidateBaseUrls) {
       final url = Uri.parse('$hostUrl/expenses/');
       try {
@@ -331,8 +304,11 @@ class ApiService {
           final results = data['results'] ?? data;
           if (results is List && results.isNotEmpty) {
             final fetched = (results).map((i) => ExpenseModel.fromJson(i)).toList();
+            final fetchedIds = fetched.map((e) => e.id).toSet();
+            final localOnly = _storedExpenses.where((e) => !fetchedIds.contains(e.id)).toList();
             _storedExpenses.clear();
-            _storedExpenses.addAll(fetched);
+            _storedExpenses.addAll([...localOnly, ...fetched]);
+            await _saveExpensesToPrefs();
             return List.from(_storedExpenses);
           }
         }
@@ -369,6 +345,8 @@ class ApiService {
     String? description,
     String? receiptPath,
   }) async {
+    await _ensureExpensesLoaded();
+
     final catName = categoryId == 1
         ? 'Travel & Transport'
         : categoryId == 2
@@ -383,10 +361,12 @@ class ApiService {
     final dateStr = '${now.day.toString().padLeft(2, '0')} ${months[now.month - 1]} ${now.year}, $timeStr';
 
     final currentUser = await getCurrentUser();
+    final newId = DateTime.now().millisecondsSinceEpoch % 1000000;
     final newExp = ExpenseModel(
-      id: _storedExpenses.length + 1,
+      id: newId,
       title: title,
       amount: amount,
+      categoryId: categoryId,
       categoryName: catName,
       dateTime: dateTime ?? date ?? dateStr,
       status: 'PENDING',
@@ -395,6 +375,7 @@ class ApiService {
     );
 
     _storedExpenses.insert(0, newExp);
+    await _saveExpensesToPrefs();
 
     // Update currentUser usedAmount & remainingAmount
     if (currentUser != null) {
@@ -445,6 +426,8 @@ class ApiService {
     required String categoryName,
     String? status,
   }) async {
+    await _ensureExpensesLoaded();
+
     final idx = _storedExpenses.indexWhere((e) => e.id == id);
     if (idx != -1) {
       final existing = _storedExpenses[idx];
@@ -452,12 +435,14 @@ class ApiService {
         id: existing.id,
         title: title,
         amount: amount,
+        categoryId: existing.categoryId,
         categoryName: categoryName,
         dateTime: existing.dateTime,
         status: status ?? existing.status,
         description: existing.description,
         userName: existing.userName,
       );
+      await _saveExpensesToPrefs();
     }
 
     for (final hostUrl in AuthService.candidateBaseUrls) {
@@ -479,7 +464,9 @@ class ApiService {
   }
 
   static Future<bool> deleteExpense(int expenseId) async {
+    await _ensureExpensesLoaded();
     _storedExpenses.removeWhere((e) => e.id == expenseId);
+    await _saveExpensesToPrefs();
     for (final hostUrl in AuthService.candidateBaseUrls) {
       final url = Uri.parse('$hostUrl/expenses/$expenseId/');
       try {
@@ -580,15 +567,21 @@ class ApiService {
         } catch (_) {}
       }
     }
+    await _ensureExpensesLoaded();
+    final totalSpent = _storedExpenses.fold(0.0, (sum, exp) => sum + exp.amount);
+    final users = await getUsers();
+    final totalBudget = users.fold(0.0, (sum, u) => sum + u.allocatedAmount);
+
+    final catMap = <String, double>{};
+    for (var e in _storedExpenses) {
+      catMap[e.categoryName] = (catMap[e.categoryName] ?? 0.0) + e.amount;
+    }
+    final breakdown = catMap.entries.map((entry) => {'category': entry.key, 'amount': entry.value}).toList();
+
     return {
-      'total_expenses': 97000.0,
-      'total_budget': 150000.0,
-      'categories_breakdown': [
-        {'category': 'Travel', 'amount': 35000.0},
-        {'category': 'Software', 'amount': 25000.0},
-        {'category': 'Meals', 'amount': 22000.0},
-        {'category': 'Supplies', 'amount': 15000.0},
-      ],
+      'total_expenses': totalSpent,
+      'total_budget': totalBudget,
+      'categories_breakdown': breakdown,
     };
   }
 
@@ -625,10 +618,10 @@ class ApiService {
     final remaining = totalAllocated - totalSpent;
 
     return {
-      'remaining_budget': remaining > 0 ? remaining : 181300.0,
-      'total_allocated': totalAllocated > 0 ? totalAllocated : 255000.0,
-      'total_expenses': totalSpent > 0 ? totalSpent : 73700.0,
-      'total_users': users.isNotEmpty ? users.length : 4,
+      'remaining_budget': remaining,
+      'total_allocated': totalAllocated,
+      'total_expenses': totalSpent,
+      'total_users': users.length,
       'over_budget': overBudgetCount,
     };
   }
@@ -647,10 +640,13 @@ class ApiService {
     }
 
     final current = await getCurrentUser();
+    final allocated = current?.allocatedAmount ?? 0.0;
+    final used = current?.usedAmount ?? 0.0;
+    final remaining = current?.remainingAmount ?? (allocated - used);
     return {
-      'allocated_budget': current?.allocatedAmount ?? 20000.0,
-      'total_expenses': current?.usedAmount ?? 3200.0,
-      'remaining_balance': current?.remainingAmount ?? 16800.0,
+      'allocated_budget': allocated,
+      'total_expenses': used,
+      'remaining_balance': remaining,
     };
   }
 
@@ -674,9 +670,10 @@ class ApiService {
 
   // --- ACCOUNTS, TRANSACTIONS, ANALYTICS & BUDGETS ---
   static Future<List<AccountModel>> getAccounts() async {
+    final dash = await getFounderDashboard();
+    final bal = (dash?['remaining_budget'] as double?) ?? 0.0;
     return [
-      AccountModel(id: 1, name: 'Main Corporate Checking', accountType: 'CHECKING', balance: 181300.0),
-      AccountModel(id: 2, name: 'Petty Cash Reserve', accountType: 'CASH', balance: 25000.0),
+      AccountModel(id: 1, name: 'Main Corporate Checking', accountType: 'CHECKING', balance: bal),
     ];
   }
 
@@ -689,26 +686,43 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> getAnalyticsSummary() async {
+    final dash = await getFounderDashboard();
+    final bal = (dash?['remaining_budget'] as double?) ?? 0.0;
+    final exp = (dash?['total_expenses'] as double?) ?? 0.0;
+    final alloc = (dash?['total_allocated'] as double?) ?? 0.0;
+    final savings = alloc > 0 ? (((alloc - exp) / alloc) * 100).clamp(0.0, 100.0) : 0.0;
+
     return {
-      'total_balance': 181300.0,
-      'monthly_income': 255000.0,
-      'monthly_expenses': 73700.0,
-      'savings_rate': 71.0,
+      'total_balance': bal,
+      'monthly_income': alloc,
+      'monthly_expenses': exp,
+      'savings_rate': savings,
     };
   }
 
   static Future<List<BudgetModel>> getBudgets() async {
-    return [
-      BudgetModel(id: 1, categoryId: 1, limitAmount: 50000.0, monthYear: '2026-08', spentAmount: 12000.0, remainingAmount: 38000.0),
-      BudgetModel(id: 2, categoryId: 2, limitAmount: 30000.0, monthYear: '2026-08', spentAmount: 8500.0, remainingAmount: 21500.0),
-    ];
+    await _ensureExpensesLoaded();
+    final cats = await getCategories();
+    final list = <BudgetModel>[];
+    for (var cat in cats) {
+      final spent = _storedExpenses.where((e) => e.categoryId == cat.id || e.categoryName.toLowerCase() == cat.name.toLowerCase()).fold(0.0, (s, e) => s + e.amount);
+      if (spent > 0) {
+        list.add(BudgetModel(id: cat.id, categoryId: cat.id, limitAmount: spent * 1.5, monthYear: '2026-08', spentAmount: spent, remainingAmount: (spent * 0.5)));
+      }
+    }
+    return list;
   }
 
   static Future<List<TransactionModel>> getTransactions() async {
-    return [
-      TransactionModel(id: 1, accountId: 1, title: 'Client Travel Expense', amount: 12000.0, transactionType: 'EXPENSE', date: '2026-08-01'),
-      TransactionModel(id: 2, accountId: 1, title: 'Software Licenses Subscription', amount: 8500.0, transactionType: 'EXPENSE', date: '2026-08-03'),
-    ];
+    await _ensureExpensesLoaded();
+    return _storedExpenses.map((e) => TransactionModel(
+      id: e.id,
+      accountId: 1,
+      title: e.title,
+      amount: e.amount,
+      transactionType: 'EXPENSE',
+      date: e.dateTime,
+    )).toList();
   }
 
   static Future<bool> createTransaction({
