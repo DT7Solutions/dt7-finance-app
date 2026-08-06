@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/expense_model.dart';
+import '../models/user_model.dart';
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
+import '02_login_screen.dart';
 import '07_add_expense_screen.dart';
 import '08_my_expenses_screen.dart';
 import '10_expense_history_screen.dart';
@@ -17,6 +20,7 @@ class EmployeeDashboardScreen extends StatefulWidget {
 class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
   int _currentIndex = 0;
   List<ExpenseModel> _recentExpenses = [];
+  UserModel? _currentUser;
 
   @override
   void initState() {
@@ -25,22 +29,70 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
   }
 
   Future<void> _loadData() async {
+    final user = await ApiService.getCurrentUser();
     final expenses = await ApiService.getExpenses();
+    
+    final allocated = user?.allocatedAmount ?? 10000.0;
+    final totalUsed = expenses.fold(0.0, (sum, exp) => sum + exp.amount);
+    final remaining = (allocated - totalUsed).clamp(0.0, double.infinity);
+
     if (mounted) {
       setState(() {
-        _recentExpenses = expenses.take(3).toList();
+        _currentUser = user != null ? UserModel(
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          department: user.department,
+          employeeId: user.employeeId,
+          allocatedAmount: allocated,
+          usedAmount: totalUsed,
+          remainingAmount: remaining,
+        ) : null;
+        _recentExpenses = expenses.take(5).toList();
       });
     }
   }
 
+  Future<void> _handleLogout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to log out?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Logout', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      await AuthService.logout();
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    }
+  }
+
   Widget _buildHomeTab() {
-    final sampleExpenses = _recentExpenses.isNotEmpty
-        ? _recentExpenses
-        : [
-            ExpenseModel(id: 1, title: 'Travel to Client', amount: 500, categoryName: 'Travel', dateTime: '04 Aug 2026', status: 'APPROVED'),
-            ExpenseModel(id: 2, title: 'Lunch with Team', amount: 200, categoryName: 'Food', dateTime: '04 Aug 2026', status: 'APPROVED'),
-            ExpenseModel(id: 3, title: 'Fuel Expense', amount: 1000, categoryName: 'Fuel', dateTime: '03 Aug 2026', status: 'APPROVED'),
-          ];
+    final name = _currentUser?.fullName.isNotEmpty == true 
+        ? _currentUser!.fullName 
+        : (_currentUser?.firstName.isNotEmpty == true 
+            ? '${_currentUser!.firstName} ${_currentUser!.lastName}'.trim()
+            : 'Employee User');
+    final allocated = _currentUser?.allocatedAmount ?? 10000.0;
+    final used = _currentUser?.usedAmount ?? 0.0;
+    final remaining = _currentUser?.remainingAmount ?? (allocated - used);
+    final progress = allocated > 0 ? (used / allocated).clamp(0.0, 1.0) : 0.0;
+    final percentText = '${(progress * 100).round()}% Used';
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20.0),
@@ -61,14 +113,22 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
                   const SizedBox(width: 10),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text('Hey, John Doe 👋', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                      Text('Good morning!', style: TextStyle(color: Colors.grey, fontSize: 11)),
+                    children: [
+                      Text('Hey, $name 👋', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      const Text('Good morning!', style: TextStyle(color: Colors.grey, fontSize: 11)),
                     ],
                   ),
                 ],
               ),
-              IconButton(icon: const Icon(Icons.notifications_none), onPressed: () {}),
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.logout, color: Colors.redAccent),
+                    tooltip: 'Logout',
+                    onPressed: _handleLogout,
+                  ),
+                ],
+              ),
             ],
           ),
           const SizedBox(height: 20),
@@ -84,27 +144,30 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Allocated Amount', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                const Text('Allocated Budget', style: TextStyle(color: Colors.grey, fontSize: 12)),
                 const SizedBox(height: 4),
-                const Text('₹10,000', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+                Text(
+                  '₹${allocated.toStringAsFixed(0)}',
+                  style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
+                ),
                 const SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text('Used Amount', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                        SizedBox(height: 2),
-                        Text('₹7,800', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                      children: [
+                        const Text('Used Budget', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                        const SizedBox(height: 2),
+                        Text('₹${used.toStringAsFixed(0)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                       ],
                     ),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
-                      children: const [
-                        Text('Remaining', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                        SizedBox(height: 2),
-                        Text('₹2,200', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                      children: [
+                        const Text('Remaining', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                        const SizedBox(height: 2),
+                        Text('₹${remaining.toStringAsFixed(0)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary)),
                       ],
                     ),
                   ],
@@ -112,17 +175,17 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
                 const SizedBox(height: 10),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
-                  child: const LinearProgressIndicator(
-                    value: 0.78,
+                  child: LinearProgressIndicator(
+                    value: progress,
                     minHeight: 6,
-                    backgroundColor: Color(0xFFF3F4F6),
-                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                    backgroundColor: const Color(0xFFF3F4F6),
+                    valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Align(
+                Align(
                   alignment: Alignment.centerRight,
-                  child: Text('78% Used', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                  child: Text(percentText, style: const TextStyle(fontSize: 10, color: Colors.grey)),
                 ),
               ],
             ),
@@ -135,22 +198,41 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
           Row(
             children: [
               Expanded(
-                child: _QuickActionBox(
+                child: _buildQuickActionCard(
+                  context,
                   icon: Icons.add_circle_outline,
                   label: 'Add Expense',
+                  color: AppColors.primary,
                   onTap: () async {
-                    await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddExpenseScreen()));
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const AddExpenseScreen()),
+                    );
                     _loadData();
                   },
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _QuickActionBox(
-                  icon: Icons.history,
-                  label: 'Expense History',
+                child: _buildQuickActionCard(
+                  context,
+                  icon: Icons.receipt_long_outlined,
+                  label: 'My Expenses',
+                  color: Colors.blue,
                   onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => const ExpenseHistoryScreen()));
+                    setState(() => _currentIndex = 1);
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildQuickActionCard(
+                  context,
+                  icon: Icons.history,
+                  label: 'History',
+                  color: Colors.purple,
+                  onTap: () {
+                    setState(() => _currentIndex = 2);
                   },
                 ),
               ),
@@ -158,116 +240,138 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
           ),
           const SizedBox(height: 24),
 
-          // Recent Expenses
+          // Recent Expenses List Header
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('Recent Expenses', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
               TextButton(
-                onPressed: () => setState(() => _currentIndex = 1),
-                child: const Text('See All'),
+                onPressed: () {
+                  setState(() => _currentIndex = 1);
+                },
+                child: const Text('See All', style: TextStyle(color: AppColors.primary, fontSize: 12)),
               ),
             ],
           ),
           const SizedBox(height: 8),
 
-          ...sampleExpenses.map((exp) => Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade100),
+          // Expenses List
+          _recentExpenses.isEmpty
+              ? Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: Column(
+                    children: const [
+                      Icon(Icons.receipt_long_outlined, size: 36, color: Colors.grey),
+                      SizedBox(height: 8),
+                      Text('No Expenses Yet', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1F2937))),
+                      SizedBox(height: 4),
+                      Text('Tap "+ Add Expense" to create your first expense claim.', style: TextStyle(fontSize: 12, color: Colors.grey), textAlign: TextAlign.center),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _recentExpenses.length,
+                  itemBuilder: (context, index) {
+                    final exp = _recentExpenses[index];
+                    return Card(
+                      elevation: 0.5,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: AppColors.primaryLight,
+                          child: const Icon(Icons.receipt, color: AppColors.primary, size: 20),
+                        ),
+                        title: Text(exp.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        subtitle: Text('${exp.categoryName} • ${exp.dateTime}', style: const TextStyle(fontSize: 11)),
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '₹${exp.amount.toStringAsFixed(0)}',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              exp.status,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: exp.isApproved ? AppColors.approvedGreen : (exp.isPending ? Colors.orange : Colors.red),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(exp.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                        const SizedBox(height: 2),
-                        Text(exp.dateTime, style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                      ],
-                    ),
-                    Text('₹${exp.amount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  ],
-                ),
-              )),
         ],
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final screens = [
-      _buildHomeTab(),
-      const MyExpensesScreen(),
-      const ExpenseHistoryScreen(),
-      const ProfileScreen(),
-    ];
-
-    return PopScope(
-      canPop: _currentIndex == 0,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop && _currentIndex != 0) {
-          setState(() {
-            _currentIndex = 0;
-          });
-        }
-      },
-      child: Scaffold(
-        body: SafeArea(child: screens[_currentIndex]),
-        floatingActionButton: FloatingActionButton(
-          backgroundColor: AppColors.primary,
-          onPressed: () async {
-            await Navigator.push(context, MaterialPageRoute(builder: (context) => const AddExpenseScreen()));
-            _loadData();
-          },
-          child: const Icon(Icons.add, color: Colors.white),
-        ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-        bottomNavigationBar: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          selectedItemColor: AppColors.primary,
-          unselectedItemColor: Colors.grey,
-          type: BottomNavigationBarType.fixed,
-          onTap: (idx) => setState(() => _currentIndex = idx),
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: 'Home'),
-            BottomNavigationBarItem(icon: Icon(Icons.receipt_long_outlined), activeIcon: Icon(Icons.receipt_long), label: 'Expenses'),
-            BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
-            BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: 'Profile'),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _QuickActionBox extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _QuickActionBox({required this.icon, required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildQuickActionCard(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(color: AppColors.primaryLight, borderRadius: BorderRadius.circular(12)),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.2)),
+        ),
         child: Column(
           children: [
-            Icon(icon, color: AppColors.primary, size: 24),
+            Icon(icon, color: color, size: 26),
             const SizedBox(height: 6),
-            Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary)),
+            Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
           ],
         ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: IndexedStack(
+        index: _currentIndex,
+        children: [
+          _buildHomeTab(),
+          const MyExpensesScreen(),
+          const ExpenseHistoryScreen(),
+          const ProfileScreen(),
+        ],
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        selectedItemColor: AppColors.primary,
+        unselectedItemColor: Colors.grey,
+        type: BottomNavigationBarType.fixed,
+        onTap: (index) => setState(() => _currentIndex = index),
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.receipt_long_outlined), activeIcon: Icon(Icons.receipt_long), label: 'Expenses'),
+          BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
+          BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: 'Profile'),
+        ],
       ),
     );
   }

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
-import '../../theme/app_theme.dart';
 import '../../widgets/app_logo.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
-import '../home/home_dashboard_screen.dart';
+import '../03_dashboard_screen.dart';
+import '../06_employee_dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -20,28 +20,42 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _errorMessage;
 
   Future<void> _handleLogin() async {
+    final input = _usernameController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (input.isEmpty || password.isEmpty) {
+      setState(() {
+        _errorMessage = 'Please enter both username and password';
+      });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
-    final success = await AuthService.login(
-      _usernameController.text.trim(),
-      _passwordController.text,
-    );
+    final role = await AuthService.authenticateUser(input, password);
 
     setState(() {
       _isLoading = false;
     });
 
-    if (success && mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomeDashboardScreen()),
-      );
+    if (role != null && mounted) {
+      if (role == 'FOUNDER' || role == 'ADMIN') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const FounderDashboardScreen()),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const EmployeeDashboardScreen()),
+        );
+      }
     } else if (mounted) {
       setState(() {
-        _errorMessage = 'Invalid username or password';
+        _errorMessage = 'Invalid username or password. Access Denied.';
       });
     }
   }
@@ -49,6 +63,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
@@ -64,8 +79,8 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 6),
               Text(
-                'Manage your accounts, track expenses & budgets',
-                style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color),
+                'Sign in to your account',
+                style: TextStyle(color: Colors.grey.shade600),
               ),
               const SizedBox(height: 32),
               if (_errorMessage != null) ...[
@@ -73,19 +88,20 @@ class _LoginScreenState extends State<LoginScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
+                    color: Colors.red.shade50,
                     borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.red.shade200),
                   ),
                   child: Text(
                     _errorMessage!,
-                    style: const TextStyle(color: Colors.red, fontSize: 13),
+                    style: const TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold),
                   ),
                 ),
                 const SizedBox(height: 16),
               ],
               CustomTextField(
-                label: 'Username',
-                hint: 'Enter your username',
+                label: 'Email / Username',
+                hint: 'Enter your username or email',
                 controller: _usernameController,
                 prefixIcon: Icons.person_outline,
               ),
@@ -98,7 +114,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 12),
               CustomButton(
-                text: 'Sign In',
+                text: 'Login',
                 onPressed: _handleLogin,
                 isLoading: _isLoading,
               ),

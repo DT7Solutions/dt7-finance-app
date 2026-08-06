@@ -366,6 +366,16 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                 ),
                 const SizedBox(height: 12),
                 TextField(
+                  controller: passwordCtrl,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    hintText: 'Enter password (default: password123)',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
                   controller: amountCtrl,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
@@ -382,6 +392,8 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                     onPressed: () async {
                       final fullName = nameCtrl.text.trim();
                       final email = emailCtrl.text.trim();
+                      final password = passwordCtrl.text.trim().isEmpty ? 'password123' : passwordCtrl.text.trim();
+
                       if (fullName.isEmpty || email.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -393,7 +405,6 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                       }
 
                       final uname = email.split('@').first.replaceAll('.', '_');
-                      final password = passwordCtrl.text;
 
                       await ApiService.addUser(
                         username: uname,
@@ -406,7 +417,8 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                         Navigator.pop(ctx);
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text('User "$fullName" created successfully!'),
+                            content: Text('User "$fullName" created! Login with email: $email and password: $password'),
+                            duration: const Duration(seconds: 5),
                             backgroundColor: AppColors.approvedGreen,
                           ),
                         );

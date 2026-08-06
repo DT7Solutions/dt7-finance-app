@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import '../models/expense_model.dart';
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_header_icon_button.dart';
 import '../widgets/status_badge.dart';
 import '03_dashboard_screen.dart';
+import '06_employee_dashboard_screen.dart';
 import '09_expense_detail_screen.dart';
 
 class ExpenseHistoryScreen extends StatefulWidget {
@@ -165,14 +167,26 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
         title: const Text('Expense History'),
         leading: AppHeaderIconButton(
           icon: Icons.arrow_back,
-          onPressed: () {
+          onPressed: () async {
             if (Navigator.canPop(context)) {
               Navigator.pop(context);
-            } else {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const FounderDashboardScreen()),
-              );
+              return;
+            }
+            final role = await AuthService.getUserRole();
+            if (context.mounted) {
+              if (role == 'EMPLOYEE') {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const EmployeeDashboardScreen()),
+                  (route) => false,
+                );
+              } else {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const FounderDashboardScreen()),
+                  (route) => false,
+                );
+              }
             }
           },
         ),
@@ -204,43 +218,50 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
               const SizedBox(height: 16),
 
               Expanded(
-                child: ListView.builder(
-                  itemCount: displayHistory.length,
-                  itemBuilder: (ctx, idx) {
-                    final item = displayHistory[idx];
-                    return InkWell(
-                      onTap: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (context) => ExpenseDetailScreen(expense: item)));
-                      },
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.grey.shade100)),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                const SizedBox(height: 4),
-                                Text(item.dateTime, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-                              ],
-                            ),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text('₹${item.amount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                const SizedBox(height: 4),
-                                StatusBadge(status: item.status),
-                              ],
-                            ),
-                          ],
+                child: displayHistory.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No expense history found',
+                          style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
                         ),
+                      )
+                    : ListView.builder(
+                        itemCount: displayHistory.length,
+                        itemBuilder: (ctx, idx) {
+                          final item = displayHistory[idx];
+                          return InkWell(
+                            onTap: () {
+                              Navigator.push(context, MaterialPageRoute(builder: (context) => ExpenseDetailScreen(expense: item)));
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.grey.shade100)),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                      const SizedBox(height: 4),
+                                      Text(item.dateTime, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                                    ],
+                                  ),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text('₹${item.amount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                      const SizedBox(height: 4),
+                                      StatusBadge(status: item.status),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ),
             ],
           ),

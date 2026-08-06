@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import '../models/expense_model.dart';
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/app_header_icon_button.dart';
 import '../widgets/status_badge.dart';
 import '03_dashboard_screen.dart';
+import '06_employee_dashboard_screen.dart';
+import '07_add_expense_screen.dart';
 import '09_expense_detail_screen.dart';
 
 class MyExpensesScreen extends StatefulWidget {
@@ -34,15 +37,7 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
     final list = await ApiService.getExpenses();
     if (mounted) {
       setState(() {
-        _expenses = list.isNotEmpty
-            ? list
-            : [
-                ExpenseModel(id: 1, title: 'Travel to Client', amount: 500, categoryName: 'Travel', dateTime: '04 Aug 2026, 02:30 PM', status: 'APPROVED'),
-                ExpenseModel(id: 2, title: 'Lunch with Team', amount: 200, categoryName: 'Food', dateTime: '04 Aug 2026, 01:15 PM', status: 'APPROVED'),
-                ExpenseModel(id: 3, title: 'Fuel Expense', amount: 1000, categoryName: 'Fuel', dateTime: '03 Aug 2026, 05:45 PM', status: 'APPROVED'),
-                ExpenseModel(id: 4, title: 'Office Supplies', amount: 1200, categoryName: 'Office', dateTime: '02 Aug 2026, 11:30 AM', status: 'PENDING'),
-                ExpenseModel(id: 5, title: 'Internet Bill', amount: 600, categoryName: 'Office', dateTime: '01 Aug 2026, 09:00 AM', status: 'APPROVED'),
-              ];
+        _expenses = list;
       });
     }
   }
@@ -136,32 +131,25 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
                             backgroundColor: AppColors.primary,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
-                          onPressed: () {
+                          onPressed: () async {
                             final newAmount = double.tryParse(amountController.text) ?? exp.amount;
                             final newTitle = titleController.text.trim().isEmpty ? exp.title : titleController.text.trim();
-                            setState(() {
-                              final idx = _expenses.indexWhere((e) => e.id == exp.id);
-                              if (idx != -1) {
-                                _expenses[idx] = ExpenseModel(
-                                  id: exp.id,
-                                  title: newTitle,
-                                  amount: newAmount,
-                                  categoryName: selectedCategory,
-                                  dateTime: exp.dateTime,
-                                  status: exp.status,
-                                  description: exp.description,
-                                  userName: exp.userName,
-                                  paymentMode: exp.paymentMode,
-                                );
-                              }
-                            });
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Expense updated successfully!'),
-                                backgroundColor: AppColors.primary,
-                              ),
+                            await ApiService.updateExpense(
+                              id: exp.id,
+                              title: newTitle,
+                              amount: newAmount,
+                              categoryName: selectedCategory,
                             );
+                            if (mounted) {
+                              Navigator.pop(context);
+                              _loadExpenses();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Expense updated successfully!'),
+                                  backgroundColor: AppColors.approvedGreen,
+                                ),
+                              );
+                            }
                           },
                           child: const Text('Save Changes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
                         ),
@@ -361,17 +349,30 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
         title: const Text('My Expenses'),
         leading: AppHeaderIconButton(
           icon: Icons.arrow_back,
-          onPressed: () {
+          onPressed: () async {
             if (widget.onBackPressed != null) {
               widget.onBackPressed!();
-            } else if (Navigator.canPop(context)) {
+              return;
+            }
+            if (Navigator.canPop(context)) {
               Navigator.pop(context);
-            } else {
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (_) => const FounderDashboardScreen()),
-                (route) => false,
-              );
+              return;
+            }
+            final role = await AuthService.getUserRole();
+            if (context.mounted) {
+              if (role == 'EMPLOYEE') {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const EmployeeDashboardScreen()),
+                  (route) => false,
+                );
+              } else {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const FounderDashboardScreen()),
+                  (route) => false,
+                );
+              }
             }
           },
         ),

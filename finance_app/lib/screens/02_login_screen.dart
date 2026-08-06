@@ -15,8 +15,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController(text: 'admin@gmail.com');
-  final _passwordController = TextEditingController(text: '123456');
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _rememberMe = true;
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -58,8 +58,9 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } else if (mounted) {
+      // REJECT WRONG CREDENTIALS
       setState(() {
-        _errorMessage = 'Invalid email or password. Please check credentials.';
+        _errorMessage = 'Invalid email or password. Access Denied.';
       });
     }
   }
@@ -110,7 +111,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
               CustomTextField(
                 label: 'Email / Username',
-                hint: 'admin@gmail.com or employee@gmail.com',
+                hint: 'Enter your username or email',
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
               ),

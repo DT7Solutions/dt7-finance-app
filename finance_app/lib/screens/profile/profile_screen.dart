@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
+import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/custom_button.dart';
@@ -24,7 +25,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadUser() async {
-    final user = await AuthService.fetchUserProfile();
+    var user = await AuthService.fetchUserProfile();
+    user ??= await ApiService.getCurrentUser();
     if (mounted) {
       setState(() {
         _user = user;

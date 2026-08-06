@@ -433,6 +433,16 @@ class _UsersScreenState extends State<UsersScreen> {
                   ),
                   const SizedBox(height: 12),
                   TextField(
+                    controller: passwordCtrl,
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      hintText: 'Enter password (default: password123)',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
                     controller: amountCtrl,
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
@@ -449,6 +459,8 @@ class _UsersScreenState extends State<UsersScreen> {
                       onPressed: () async {
                         final fullName = nameCtrl.text.trim();
                         final email = emailCtrl.text.trim();
+                        final password = passwordCtrl.text.trim().isEmpty ? 'password123' : passwordCtrl.text.trim();
+
                         if (fullName.isEmpty || email.isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -460,15 +472,11 @@ class _UsersScreenState extends State<UsersScreen> {
                         }
 
                         final uname = email.split('@').first.replaceAll('.', '_');
-                        final nameParts = fullName.split(' ');
-                        final fName = nameParts.first;
-                        final lName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
-                        final allocated = double.tryParse(amountCtrl.text) ?? 10000;
 
                         await ApiService.addUser(
                           username: uname,
                           email: email,
-                          password: passwordCtrl.text,
+                          password: password,
                           fullName: fullName,
                         );
 
@@ -477,7 +485,164 @@ class _UsersScreenState extends State<UsersScreen> {
                           _loadUsers();
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('User "$fullName" created successfully!'),
+                              content: Text('User "$fullName" created! Login with email: $email and password: $password'),
+                              duration: const Duration(seconds: 5),
+                              backgroundColor: AppColors.approvedGreen,
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showEditUserModal(UserModel user) {
+    final nameCtrl = TextEditingController(text: user.fullName);
+    final emailCtrl = TextEditingController(text: user.email);
+    final passwordCtrl = TextEditingController();
+    final amountCtrl = TextEditingController(text: user.allocatedAmount.toStringAsFixed(0));
+    String selectedRole = user.isAdmin || user.role == 'FOUNDER' ? 'ADMIN' : 'EMPLOYEE';
+    bool obscureEditPassword = true;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(
+              top: 20,
+              left: 24,
+              right: 24,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Edit User (${user.firstName})',
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Full Name',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      labelText: 'Email Address',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedRole,
+                    decoration: InputDecoration(
+                      labelText: 'Role',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'EMPLOYEE', child: Text('Employee')),
+                      DropdownMenuItem(value: 'ADMIN', child: Text('Admin / Founder')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) {
+                        setModalState(() => selectedRole = val);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: passwordCtrl,
+                    obscureText: obscureEditPassword,
+                    decoration: InputDecoration(
+                      labelText: 'New Password (Optional)',
+                      hintText: 'Leave blank to keep unchanged',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          obscureEditPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                          color: Colors.grey.shade600,
+                        ),
+                        onPressed: () {
+                          setModalState(() {
+                            obscureEditPassword = !obscureEditPassword;
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: amountCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Allocated Amount (₹)',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: CustomButton(
+                      text: 'Save Changes',
+                      onPressed: () async {
+                        final fullName = nameCtrl.text.trim();
+                        final email = emailCtrl.text.trim();
+                        final allocated = double.tryParse(amountCtrl.text.trim()) ?? user.allocatedAmount;
+
+                        if (fullName.isEmpty || email.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Please fill all required fields'),
+                              backgroundColor: Colors.redAccent,
+                            ),
+                          );
+                          return;
+                        }
+
+                        await ApiService.updateUser(
+                          id: user.id,
+                          fullName: fullName,
+                          email: email,
+                          role: selectedRole,
+                          allocatedAmount: allocated,
+                          password: passwordCtrl.text.trim().isNotEmpty ? passwordCtrl.text.trim() : null,
+                        );
+
+                        if (context.mounted) {
+                          Navigator.pop(ctx);
+                          _loadUsers();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('User "$fullName" updated successfully!'),
                               backgroundColor: AppColors.approvedGreen,
                             ),
                           );
@@ -641,8 +806,21 @@ class _UsersScreenState extends State<UsersScreen> {
                             children: [
                               Text('₹${u.allocatedAmount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                               const SizedBox(height: 2),
-                              const Text('Active', style: TextStyle(fontSize: 10, color: AppColors.approvedGreen, fontWeight: FontWeight.bold)),
+                              Text(
+                                u.isAdmin || u.role == 'FOUNDER' ? 'Admin' : 'Employee',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: u.isAdmin || u.role == 'FOUNDER' ? AppColors.primary : AppColors.approvedGreen,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ],
+                          ),
+                          const SizedBox(width: 6),
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined, color: AppColors.primary, size: 20),
+                            onPressed: () => _showEditUserModal(u),
+                            tooltip: 'Edit User',
                           ),
                         ],
                       ),
