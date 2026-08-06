@@ -4,6 +4,7 @@ import '../models/user_model.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/custom_button.dart';
 import '02_login_screen.dart';
 import '07_add_expense_screen.dart';
 import '08_my_expenses_screen.dart';
@@ -21,6 +22,8 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
   int _currentIndex = 0;
   List<ExpenseModel> _recentExpenses = [];
   UserModel? _currentUser;
+  String? _profilePhotoUrl;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -31,28 +34,67 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
   Future<void> _loadData() async {
     final user = await ApiService.getCurrentUser();
     final expenses = await ApiService.getExpenses();
-    
-    final allocated = user?.allocatedAmount ?? 10000.0;
-    final totalUsed = expenses.fold(0.0, (sum, exp) => sum + exp.amount);
-    final remaining = (allocated - totalUsed).clamp(0.0, double.infinity);
+    final photo = await AuthService.getProfilePhoto();
+
+    final allocated = user?.allocatedAmount ?? 0.0;
+    final userExpenses = expenses.where((e) {
+      final uName = (user?.username ?? '').toLowerCase();
+      final fName = (user?.fullName ?? '').toLowerCase();
+      final expUser = e.userName.toLowerCase();
+      return expUser == uName || expUser == fName || (uName.isNotEmpty && expUser.contains(uName));
+    }).toList();
+
+    final totalUsed = userExpenses.isNotEmpty
+        ? userExpenses.fold(0.0, (sum, exp) => sum + exp.amount)
+        : (user?.usedAmount ?? 0.0);
+
+    final remaining = allocated - totalUsed;
 
     if (mounted) {
       setState(() {
-        _currentUser = user != null ? UserModel(
-          id: user.id,
-          username: user.username,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          role: user.role,
-          department: user.department,
-          employeeId: user.employeeId,
-          allocatedAmount: allocated,
-          usedAmount: totalUsed,
-          remainingAmount: remaining,
-        ) : null;
-        _recentExpenses = expenses.take(5).toList();
+        _profilePhotoUrl = photo;
+        _currentUser = user != null
+            ? UserModel(
+                id: user.id,
+                username: user.username,
+                email: user.email,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                role: user.role,
+                department: user.department,
+                employeeId: user.employeeId,
+                allocatedAmount: allocated,
+                usedAmount: totalUsed,
+                remainingAmount: remaining,
+              )
+            : null;
+        _recentExpenses = userExpenses.isNotEmpty ? userExpenses.take(5).toList() : expenses.take(5).toList();
+        _isLoading = false;
       });
+    }
+  }
+
+
+
+  Widget _buildAvatarImage(String path, {required double size}) {
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return Image.network(
+        path,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Icon(Icons.person, size: size * 0.6, color: AppColors.primary),
+      );
+    } else if (path.startsWith('assets/')) {
+      return Image.asset(
+        path,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Icon(Icons.person, size: size * 0.6, color: AppColors.primary),
+      );
+    } else {
+      return Icon(Icons.person, size: size * 0.6, color: AppColors.primary);
     }
   }
 
@@ -83,16 +125,28 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
   }
 
   Widget _buildHomeTab() {
+    if (_isLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(40.0),
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
+      );
+    }
+
     final name = _currentUser?.fullName.isNotEmpty == true 
         ? _currentUser!.fullName 
         : (_currentUser?.firstName.isNotEmpty == true 
             ? '${_currentUser!.firstName} ${_currentUser!.lastName}'.trim()
-            : 'Employee User');
-    final allocated = _currentUser?.allocatedAmount ?? 10000.0;
+            : (_currentUser?.username ?? ''));
+    final allocated = _currentUser?.allocatedAmount ?? 0.0;
     final used = _currentUser?.usedAmount ?? 0.0;
     final remaining = _currentUser?.remainingAmount ?? (allocated - used);
+    final isOverspent = remaining < 0;
+    final overspendAmount = (used - allocated).clamp(0.0, double.infinity);
     final progress = allocated > 0 ? (used / allocated).clamp(0.0, 1.0) : 0.0;
-    final percentText = '${(progress * 100).round()}% Used';
+    final percentVal = allocated > 0 ? ((used / allocated) * 100).round() : 0;
+    final percentText = isOverspent ? '$percentVal% Used (Over Budget)' : '$percentVal% Used';
 
     return RefreshIndicator(
       onRefresh: _loadData,
@@ -108,10 +162,25 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
               children: [
                 Row(
                   children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: AppColors.primaryLight,
-                      child: const Icon(Icons.person, color: AppColors.primary),
+                    GestureDetector(
+                      onTap: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                        );
+                        _loadData();
+                      },
+                      child: CircleAvatar(
+                        radius: 22,
+                        backgroundColor: AppColors.primaryLight,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(100),
+                          child: _buildAvatarImage(
+                            _profilePhotoUrl ?? 'assets/images/founder_avatar.png',
+                            size: 44,
+                          ),
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 10),
                     Column(
@@ -136,13 +205,59 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
             ),
             const SizedBox(height: 20),
 
+            // Overspend Warning Banner (if over budget)
+            if (isOverspent) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFFCA5A5)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 24),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Budget Overspent Alert!',
+                            style: TextStyle(
+                              color: Color(0xFF991B1B),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'You have overspent by ₹${overspendAmount.toStringAsFixed(0)}. Please contact founder/admin for budget reallocation.',
+                            style: const TextStyle(
+                              color: Color(0xFFDC2626),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
             // Allocated Amount Card
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: isOverspent ? const Color(0xFFFEF2F2) : Colors.white,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey.shade200),
+                border: Border.all(
+                  color: isOverspent ? const Color(0xFFFCA5A5) : Colors.grey.shade200,
+                  width: isOverspent ? 1.5 : 1.0,
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -162,15 +277,38 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
                         children: [
                           const Text('Used Budget', style: TextStyle(fontSize: 10, color: Colors.grey)),
                           const SizedBox(height: 2),
-                          Text('₹${used.toStringAsFixed(0)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                          Text(
+                            '₹${used.toStringAsFixed(0)}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: isOverspent ? Colors.redAccent : const Color(0xFF1F2937),
+                            ),
+                          ),
                         ],
                       ),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          const Text('Remaining', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                          Text(
+                            isOverspent ? 'Overspent Extra' : 'Remaining',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: isOverspent ? Colors.redAccent : Colors.grey,
+                              fontWeight: isOverspent ? FontWeight.bold : FontWeight.normal,
+                            ),
+                          ),
                           const SizedBox(height: 2),
-                          Text('₹${remaining.toStringAsFixed(0)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                          Text(
+                            isOverspent
+                                ? '- ₹${overspendAmount.toStringAsFixed(0)}'
+                                : '₹${remaining.toStringAsFixed(0)}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: isOverspent ? Colors.redAccent : AppColors.primary,
+                            ),
+                          ),
                         ],
                       ),
                     ],
@@ -182,13 +320,22 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
                       value: progress,
                       minHeight: 6,
                       backgroundColor: const Color(0xFFF3F4F6),
-                      valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        isOverspent ? Colors.redAccent : AppColors.primary,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 4),
                   Align(
                     alignment: Alignment.centerRight,
-                    child: Text(percentText, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                    child: Text(
+                      percentText,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: isOverspent ? FontWeight.bold : FontWeight.normal,
+                        color: isOverspent ? Colors.redAccent : Colors.grey,
+                      ),
+                    ),
                   ),
                 ],
               ),

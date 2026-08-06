@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/app_header_icon_button.dart';
+import '../widgets/custom_button.dart';
 import '02_login_screen.dart';
 import '03_dashboard_screen.dart';
 import '06_employee_dashboard_screen.dart';
@@ -21,6 +22,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   int _selectedVersion = 0; // 0 = Overview, 1 = Settings & Security
   UserModel? _currentUser;
+  String? _profilePhotoUrl;
   bool _isLoading = true;
 
   @override
@@ -31,11 +33,229 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadProfileData() async {
     final user = await ApiService.getCurrentUser();
+    final photo = await AuthService.getProfilePhoto();
     if (mounted) {
       setState(() {
         _currentUser = user;
+        _profilePhotoUrl = photo;
         _isLoading = false;
       });
+    }
+  }
+
+  void _showEditProfilePhotoModal(BuildContext context) {
+    final photoCtrl = TextEditingController(text: _profilePhotoUrl ?? '');
+    String selectedPhoto = _profilePhotoUrl ?? 'assets/images/founder_avatar.png';
+
+    final presetAvatars = [
+      'assets/images/founder_avatar.png',
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+      'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
+      'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(
+              top: 20,
+              left: 24,
+              right: 24,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Edit Profile Photo',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF111827)),
+                  ),
+                  const SizedBox(height: 16),
+                  Stack(
+                    alignment: Alignment.bottomRight,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: const BoxDecoration(
+                          color: AppColors.primaryLight,
+                          shape: BoxShape.circle,
+                        ),
+                        child: CircleAvatar(
+                          radius: 44,
+                          backgroundColor: Colors.white,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(100),
+                            child: _buildAvatarImage(selectedPhoto, size: 88),
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: const BoxDecoration(
+                          color: AppColors.primary,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Select Preset Avatar',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF374151)),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    height: 64,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: presetAvatars.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 12),
+                      itemBuilder: (context, idx) {
+                        final avatarPath = presetAvatars[idx];
+                        final isSelected = selectedPhoto == avatarPath;
+                        return GestureDetector(
+                          onTap: () {
+                            setModalState(() {
+                              selectedPhoto = avatarPath;
+                              photoCtrl.text = avatarPath;
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isSelected ? AppColors.primary : Colors.transparent,
+                                width: 2.5,
+                              ),
+                            ),
+                            child: CircleAvatar(
+                              radius: 26,
+                              backgroundColor: Colors.grey.shade100,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(100),
+                                child: _buildAvatarImage(avatarPath, size: 52),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Or Custom Image URL / Asset Path',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF374151)),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: photoCtrl,
+                    decoration: InputDecoration(
+                      hintText: 'e.g. https://example.com/avatar.jpg',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    ),
+                    onChanged: (val) {
+                      setModalState(() {
+                        selectedPhoto = val.trim();
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () async {
+                            await AuthService.saveProfilePhoto('');
+                            if (mounted) {
+                              Navigator.pop(ctx);
+                              _loadProfileData();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Profile photo removed!'), backgroundColor: Colors.grey),
+                              );
+                            }
+                          },
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: const Text('Remove Photo', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: CustomButton(
+                          text: 'Save Photo',
+                          onPressed: () async {
+                            final finalPath = photoCtrl.text.trim().isNotEmpty ? photoCtrl.text.trim() : selectedPhoto;
+                            await AuthService.saveProfilePhoto(finalPath);
+                            if (mounted) {
+                              Navigator.pop(ctx);
+                              _loadProfileData();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Profile photo updated successfully!'), backgroundColor: AppColors.approvedGreen),
+                              );
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAvatarImage(String path, {required double size}) {
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return Image.network(
+        path,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Icon(Icons.person, size: size * 0.6, color: AppColors.primary),
+      );
+    } else if (path.startsWith('assets/')) {
+      return Image.asset(
+        path,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Icon(Icons.person, size: size * 0.6, color: AppColors.primary),
+      );
+    } else {
+      return Icon(Icons.person, size: size * 0.6, color: AppColors.primary);
     }
   }
 
@@ -163,51 +383,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       padding: const EdgeInsets.only(left: 20, right: 20, bottom: 24, top: 4),
                       child: Column(
                         children: [
-                          Stack(
-                            alignment: Alignment.bottomRight,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(3),
-                                decoration: const BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: CircleAvatar(
-                                  radius: 44,
-                                  backgroundColor: AppColors.primaryLight,
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(100),
-                                    child: Image.asset(
-                                      'assets/images/founder_avatar.png',
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) => const Icon(
-                                        Icons.person,
-                                        size: 52,
-                                        color: AppColors.primary,
+                          GestureDetector(
+                            onTap: () => _showEditProfilePhotoModal(context),
+                            child: Stack(
+                              alignment: Alignment.bottomRight,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(3),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: CircleAvatar(
+                                    radius: 44,
+                                    backgroundColor: AppColors.primaryLight,
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(100),
+                                      child: _buildAvatarImage(
+                                        _profilePhotoUrl ?? 'assets/images/founder_avatar.png',
+                                        size: 88,
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.15),
-                                      blurRadius: 6,
-                                    )
-                                  ],
+                                Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.15),
+                                        blurRadius: 6,
+                                      )
+                                    ],
+                                  ),
+                                  child: const Icon(
+                                    Icons.camera_alt_rounded,
+                                    size: 16,
+                                    color: AppColors.primary,
+                                  ),
                                 ),
-                                child: const Icon(
-                                  Icons.camera_alt_rounded,
-                                  size: 16,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                           const SizedBox(height: 12),
                           Row(

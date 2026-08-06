@@ -78,7 +78,7 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
-                        children: ['All', 'Travel', 'Food', 'Fuel', 'Office'].map((cat) {
+                        children: ['All', 'Software Tools', 'AI Subscriptions', 'Travel', 'Fuel', 'Office'].map((cat) {
                           final isSel = _categoryFilter == cat;
                           return ChoiceChip(
                             label: Text(cat),

@@ -6,6 +6,7 @@ import 'api_service.dart';
 
 class AuthService {
   static String baseUrl = 'http://192.168.0.2:8000/api/v1';
+  static String? _activeBaseUrl;
 
   static final List<String> candidateBaseUrls = [
     'http://192.168.0.2:8000/api/v1',
@@ -13,6 +14,18 @@ class AuthService {
     'http://127.0.0.1:8000/api/v1',
     'http://localhost:8000/api/v1',
   ];
+
+  static List<String> get candidateUrls {
+    if (_activeBaseUrl != null && _activeBaseUrl!.isNotEmpty) {
+      return [_activeBaseUrl!, ...candidateBaseUrls.where((u) => u != _activeBaseUrl)];
+    }
+    return candidateBaseUrls;
+  }
+
+  static void setActiveBaseUrl(String url) {
+    _activeBaseUrl = url;
+    baseUrl = url;
+  }
 
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
@@ -42,7 +55,21 @@ class AuthService {
 
   static Future<String> getCurrentUsername() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('current_username') ?? 'dinesh';
+    return prefs.getString('current_username') ?? '';
+  }
+
+  static Future<void> saveProfilePhoto(String photoUrl) async {
+    final prefs = await SharedPreferences.getInstance();
+    final username = await getCurrentUsername();
+    final key = username.isNotEmpty ? 'profile_photo_${username.toLowerCase()}' : 'profile_photo_default';
+    await prefs.setString(key, photoUrl);
+  }
+
+  static Future<String?> getProfilePhoto() async {
+    final prefs = await SharedPreferences.getInstance();
+    final username = await getCurrentUsername();
+    final key = username.isNotEmpty ? 'profile_photo_${username.toLowerCase()}' : 'profile_photo_default';
+    return prefs.getString(key);
   }
 
   static Future<void> logout() async {
@@ -79,7 +106,9 @@ class AuthService {
 
     final endpoints = ['/auth/token/', '/token/'];
 
-    for (final hostUrl in candidateBaseUrls) {
+    bool serverResponded = false;
+
+    for (final hostUrl in candidateUrls) {
       for (final endpoint in endpoints) {
         for (final payload in payloads) {
           try {
@@ -88,10 +117,12 @@ class AuthService {
               url,
               headers: {'Content-Type': 'application/json'},
               body: jsonEncode(payload),
-            ).timeout(const Duration(milliseconds: 3500));
+            ).timeout(const Duration(milliseconds: 1500));
+
+            serverResponded = true;
 
             if (response.statusCode == 200 || response.statusCode == 201) {
-              baseUrl = hostUrl;
+              setActiveBaseUrl(hostUrl);
               final data = jsonDecode(response.body);
               if (data is Map<String, dynamic>) {
                 final access = data['access'] ?? data['token'] ?? data['access_token'];
@@ -131,13 +162,45 @@ class AuthService {
                   return role;
                 }
               }
+            } else if (response.statusCode == 400 || response.statusCode == 401) {
+              return null;
             }
           } catch (_) {}
         }
       }
     }
 
-    // Backend API rejected credentials or was unreachable -> Access Denied
+    if (serverResponded) {
+      return null;
+    }
+
+    // Check against registered/created application users for offline/standalone mode
+    final lowerInput = cleanInput.toLowerCase();
+    final users = await ApiService.getUsers();
+    final matched = users.firstWhere(
+      (u) {
+        final uName = u.username.toLowerCase();
+        final uEmail = u.email.toLowerCase();
+        final uFirst = u.firstName.toLowerCase();
+        final uEmpId = u.employeeId.toLowerCase();
+        return uName == lowerInput ||
+               uEmail == lowerInput ||
+               (uFirst.isNotEmpty && uFirst == lowerInput) ||
+               (uEmpId.isNotEmpty && uEmpId == lowerInput) ||
+               (lowerInput.contains('@') && uEmail == lowerInput) ||
+               (lowerInput.contains('@') && uEmail.startsWith(lowerInput.split('@').first));
+      },
+      orElse: () => UserModel(id: -1, username: '', email: '', firstName: '', lastName: ''),
+    );
+
+    if (matched.id != -1) {
+      final role = (matched.isAdmin || matched.role == 'ADMIN' || matched.role == 'FOUNDER') ? 'FOUNDER' : 'EMPLOYEE';
+      await saveToken('jwt_access_token_${matched.username}', 'jwt_refresh_token_${matched.username}');
+      await saveCurrentUsername(matched.username);
+      await saveUserRole(role);
+      return role;
+    }
+
     return null;
   }
 

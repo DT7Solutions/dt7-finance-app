@@ -105,8 +105,9 @@ class _BudgetRequestScreenState extends State<BudgetRequestScreen> {
                 items: (_categories.isNotEmpty
                         ? _categories
                         : [
-                            CategoryModel(id: 1, name: 'Travel', type: 'EXPENSE', icon: 'directions_car', color: '#3B82F6'),
-                            CategoryModel(id: 2, name: 'Food', type: 'EXPENSE', icon: 'restaurant', color: '#10B981'),
+                            CategoryModel(id: 1, name: 'Software Tools', type: 'EXPENSE', icon: 'computer', color: '#8B5CF6'),
+                            CategoryModel(id: 2, name: 'AI Subscriptions', type: 'EXPENSE', icon: 'psychology', color: '#EC4899'),
+                            CategoryModel(id: 3, name: 'Travel & Transport', type: 'EXPENSE', icon: 'directions_car', color: '#3B82F6'),
                           ])
                     .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
                     .toList(),

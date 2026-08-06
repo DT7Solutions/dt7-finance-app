@@ -39,6 +39,12 @@ class _AllocateBudgetScreenState extends State<AllocateBudgetScreen> {
     }
   }
 
+  UserModel? get _selectedUser {
+    if (_selectedEmployeeId == null || _users.isEmpty) return null;
+    final idx = _users.indexWhere((u) => u.id == _selectedEmployeeId);
+    return idx != -1 ? _users[idx] : null;
+  }
+
   Future<void> _handleAllocate() async {
     if (_selectedEmployeeId == null || _amountController.text.isEmpty) return;
 
@@ -49,6 +55,10 @@ class _AllocateBudgetScreenState extends State<AllocateBudgetScreen> {
       amount: amt,
       note: _noteController.text.trim(),
     );
+
+    await _loadUsers();
+    _amountController.clear();
+    _noteController.clear();
 
     setState(() => _isAllocating = false);
 
@@ -181,30 +191,14 @@ class _AllocateBudgetScreenState extends State<AllocateBudgetScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Current Balance Section
-                  const Text(
-                    'Current Balance',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF6B7280),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    '₹10,000',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF111827),
-                    ),
-                  ),
+                  // Dynamic Current Balance Card
+                  _buildCurrentBalanceCard(),
                   const SizedBox(height: 20),
 
                   // Amount Input
                   CustomTextField(
                     label: 'Amount to Allocate (₹)',
-                    hint: '10000',
+                    hint: 'Enter amount',
                     controller: _amountController,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   ),
@@ -230,6 +224,87 @@ class _AllocateBudgetScreenState extends State<AllocateBudgetScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildCurrentBalanceCard() {
+    final u = _selectedUser;
+    final allocated = u?.allocatedAmount ?? 0.0;
+    final remaining = u?.remainingAmount ?? 0.0;
+    final isNegative = remaining < 0;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isNegative ? const Color(0xFFFEF2F2) : const Color(0xFFFFF5ED),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isNegative ? const Color(0xFFFCA5A5) : const Color(0xFFFFD4C0),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Current Allocated (${u?.fullName.isNotEmpty == true ? u!.fullName : 'Selected Employee'})',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: isNegative ? const Color(0xFF991B1B) : Colors.grey.shade700,
+                ),
+              ),
+              if (isNegative)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade100,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text(
+                    'OVERSPENT',
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.redAccent),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                '₹${allocated.toStringAsFixed(0)}',
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF111827),
+                ),
+              ),
+              Row(
+                children: [
+                  Text(
+                    'Remaining: ',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                  Text(
+                    isNegative ? '- ₹${remaining.abs().toStringAsFixed(0)}' : '₹${remaining.toStringAsFixed(0)}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: isNegative ? Colors.redAccent : AppColors.approvedGreen,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

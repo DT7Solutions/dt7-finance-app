@@ -53,11 +53,12 @@ class ApiService {
 
   static Future<List<UserModel>> getUsers() async {
     await _ensureUsersLoaded();
-    for (final hostUrl in AuthService.candidateBaseUrls) {
+    for (final hostUrl in AuthService.candidateUrls) {
       final url = Uri.parse('$hostUrl/users/');
       try {
-        final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 2000));
+        final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 500));
         if (response.statusCode == 200) {
+          AuthService.setActiveBaseUrl(hostUrl);
           final data = jsonDecode(response.body);
           final results = data['results'] ?? data;
           if (results is List && results.isNotEmpty) {
@@ -67,12 +68,66 @@ class ApiService {
             _storedUsers.clear();
             _storedUsers.addAll([...localOnly, ...parsedUsers]);
             await _saveUsersToPrefs();
-            return List.from(_storedUsers);
+            break;
           }
         }
       } catch (_) {}
     }
-    return List.from(_storedUsers);
+
+    // Dynamically calculate user spentAmount and remainingAmount based on all active expenses
+    await _ensureExpensesLoaded();
+    final expenses = _storedExpenses;
+
+    final updatedUsers = _storedUsers.map((u) {
+      final spent = calculateUserSpent(u, expenses);
+      final finalSpent = spent > 0 ? spent : u.usedAmount;
+      final rem = u.allocatedAmount - finalSpent;
+
+      return UserModel(
+        id: u.id,
+        username: u.username,
+        email: u.email,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        role: u.role,
+        department: u.department,
+        employeeId: u.employeeId,
+        allocatedAmount: u.allocatedAmount,
+        usedAmount: finalSpent,
+        remainingAmount: rem,
+      );
+    }).toList();
+
+    return updatedUsers;
+  }
+
+  static double calculateUserSpent(UserModel u, List<ExpenseModel> expenses) {
+    final uname = u.username.trim().toLowerCase();
+    final fname = u.fullName.trim().toLowerCase();
+    final email = u.email.trim().toLowerCase();
+    final first = u.firstName.trim().toLowerCase();
+
+    double total = 0.0;
+    for (var exp in expenses) {
+      final expUser = exp.userName.trim().toLowerCase();
+      if (expUser.isEmpty) continue;
+
+      bool matches = false;
+      if (expUser == uname || expUser == fname || expUser == email) {
+        matches = true;
+      } else if (uname.isNotEmpty && (expUser.contains(uname) || uname.contains(expUser))) {
+        matches = true;
+      } else if (fname.isNotEmpty && (expUser.contains(fname) || fname.contains(expUser))) {
+        matches = true;
+      } else if (first.isNotEmpty && (expUser.contains(first) || first.contains(expUser))) {
+        matches = true;
+      }
+
+      if (matches) {
+        total += exp.amount;
+      }
+    }
+    return total;
   }
 
   static Future<UserModel?> getCurrentUser() async {
@@ -212,10 +267,11 @@ class ApiService {
       } catch (_) {}
     }
     return [
-      CategoryModel(id: 1, name: 'Travel & Transport', type: 'EXPENSE', icon: 'directions_car', color: '#2563EB'),
-      CategoryModel(id: 2, name: 'Meals & Entertainment', type: 'EXPENSE', icon: 'restaurant', color: '#10B981'),
-      CategoryModel(id: 3, name: 'Office Supplies', type: 'EXPENSE', icon: 'shopping_bag', color: '#F59E0B'),
-      CategoryModel(id: 4, name: 'Software & Tools', type: 'EXPENSE', icon: 'computer', color: '#8B5CF6'),
+      CategoryModel(id: 1, name: 'Software Tools', type: 'EXPENSE', icon: 'computer', color: '#8B5CF6'),
+      CategoryModel(id: 2, name: 'AI Subscriptions', type: 'EXPENSE', icon: 'psychology', color: '#EC4899'),
+      CategoryModel(id: 3, name: 'Travel & Transport', type: 'EXPENSE', icon: 'directions_car', color: '#2563EB'),
+      CategoryModel(id: 4, name: 'Office Supplies', type: 'EXPENSE', icon: 'shopping_bag', color: '#F59E0B'),
+      CategoryModel(id: 5, name: 'Fuel', type: 'EXPENSE', icon: 'local_gas_station', color: '#10B981'),
     ];
   }
 
@@ -295,11 +351,12 @@ class ApiService {
   // --- EXPENSES ---
   static Future<List<ExpenseModel>> getExpenses() async {
     await _ensureExpensesLoaded();
-    for (final hostUrl in AuthService.candidateBaseUrls) {
+    for (final hostUrl in AuthService.candidateUrls) {
       final url = Uri.parse('$hostUrl/expenses/');
       try {
-        final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 2000));
+        final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 500));
         if (response.statusCode == 200) {
+          AuthService.setActiveBaseUrl(hostUrl);
           final data = jsonDecode(response.body);
           final results = data['results'] ?? data;
           if (results is List && results.isNotEmpty) {
@@ -588,11 +645,12 @@ class ApiService {
   // --- DASHBOARDS ---
   static Future<Map<String, dynamic>?> getFounderDashboard() async {
     if (await AuthService.hasRealToken()) {
-      for (final hostUrl in AuthService.candidateBaseUrls) {
+      for (final hostUrl in AuthService.candidateUrls) {
         final url = Uri.parse('$hostUrl/dashboard/founder/');
         try {
-          final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 2000));
+          final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 500));
           if (response.statusCode == 200) {
+            AuthService.setActiveBaseUrl(hostUrl);
             final data = jsonDecode(response.body);
             if (data is Map<String, dynamic>) {
               return data;
@@ -603,24 +661,30 @@ class ApiService {
     }
 
     final users = await getUsers();
-    double totalAllocated = 0;
-    double totalSpent = 0;
+    final expenses = await getExpenses();
+
+    double totalExpensesSum = expenses.fold(0.0, (s, e) => s + e.amount);
+    double totalAllocated = 0.0;
     int overBudgetCount = 0;
 
     for (var u in users) {
       totalAllocated += u.allocatedAmount;
-      totalSpent += u.usedAmount;
-      if (u.usedAmount > u.allocatedAmount && u.allocatedAmount > 0) {
+
+      final spent = calculateUserSpent(u, expenses);
+      final actualUserSpent = spent > 0 ? spent : u.usedAmount;
+
+      if ((actualUserSpent > u.allocatedAmount || (u.allocatedAmount - actualUserSpent) < 0) && u.allocatedAmount > 0) {
         overBudgetCount++;
       }
     }
 
-    final remaining = totalAllocated - totalSpent;
+    final totalSpentFinal = totalExpensesSum > 0 ? totalExpensesSum : users.fold(0.0, (s, u) => s + u.usedAmount);
+    final remaining = totalAllocated - totalSpentFinal;
 
     return {
       'remaining_budget': remaining,
       'total_allocated': totalAllocated,
-      'total_expenses': totalSpent,
+      'total_expenses': totalSpentFinal,
       'total_users': users.length,
       'over_budget': overBudgetCount,
     };

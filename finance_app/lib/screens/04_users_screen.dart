@@ -377,8 +377,9 @@ class _UsersScreenState extends State<UsersScreen> {
     final nameCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
     final passwordCtrl = TextEditingController(text: 'password123');
-    final amountCtrl = TextEditingController(text: '10000');
+    final amountCtrl = TextEditingController();
     String selectedRole = 'EMPLOYEE';
+    bool obscurePassword = true;
 
     showModalBottomSheet(
       context: context,
@@ -396,89 +397,125 @@ class _UsersScreenState extends State<UsersScreen> {
             ),
             child: SingleChildScrollView(
               child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Add New User',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(ctx),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: nameCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'Full Name',
-                      hintText: 'e.g. Neha Singh',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: emailCtrl,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: InputDecoration(
-                      labelText: 'Email Address',
-                      hintText: 'e.g. neha@dt7.agency',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: passwordCtrl,
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      hintText: 'Enter password (default: password123)',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: amountCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'Initial Allocated Amount (₹)',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: CustomButton(
-                      text: 'Create User',
-                      onPressed: () async {
-                        final fullName = nameCtrl.text.trim();
-                        final email = emailCtrl.text.trim();
-                        final password = passwordCtrl.text.trim().isEmpty ? 'password123' : passwordCtrl.text.trim();
-
-                        if (fullName.isEmpty || email.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Please enter full name and email address'),
-                              backgroundColor: Colors.redAccent,
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Add New User',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                             ),
-                          );
-                          return;
-                        }
+                            IconButton(
+                              icon: const Icon(Icons.close),
+                              onPressed: () => Navigator.pop(ctx),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: nameCtrl,
+                          decoration: InputDecoration(
+                            labelText: 'Full Name',
+                            hintText: 'e.g. Neha Singh',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: emailCtrl,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: InputDecoration(
+                            labelText: 'Email Address',
+                            hintText: 'e.g. neha@dt7.agency',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          value: selectedRole,
+                          decoration: InputDecoration(
+                            labelText: 'User Role',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: 'EMPLOYEE', child: Text('Employee')),
+                            DropdownMenuItem(value: 'ADMIN', child: Text('Admin / Founder')),
+                          ],
+                          onChanged: (val) {
+                            if (val != null) setModalState(() => selectedRole = val);
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: passwordCtrl,
+                          obscureText: obscurePassword,
+                          decoration: InputDecoration(
+                            labelText: 'User Password',
+                            hintText: 'Create a custom password for user',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                obscurePassword ? Icons.visibility_off : Icons.visibility,
+                                color: Colors.grey,
+                              ),
+                              onPressed: () {
+                                setModalState(() => obscurePassword = !obscurePassword);
+                              },
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: amountCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            labelText: 'Initial Allocated Amount (₹)',
+                            hintText: 'Enter amount',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: CustomButton(
+                            text: 'Create User',
+                            onPressed: () async {
+                              final fullName = nameCtrl.text.trim();
+                              final email = emailCtrl.text.trim();
+                              final password = passwordCtrl.text.trim();
 
-                        final uname = email.split('@').first.replaceAll('.', '_');
+                              if (fullName.isEmpty || email.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Please enter full name and email address'),
+                                    backgroundColor: Colors.redAccent,
+                                  ),
+                                );
+                                return;
+                              }
 
-                        await ApiService.addUser(
-                          username: uname,
-                          email: email,
-                          password: password,
-                          fullName: fullName,
-                        );
+                              if (password.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Please enter a password for the new user'),
+                                    backgroundColor: Colors.redAccent,
+                                  ),
+                                );
+                                return;
+                              }
+
+                              final uname = email.split('@').first.replaceAll('.', '_');
+
+                              await ApiService.addUser(
+                                username: uname,
+                                email: email,
+                                password: password,
+                                fullName: fullName,
+                                role: selectedRole,
+                              );
 
                         if (context.mounted) {
                           Navigator.pop(ctx);

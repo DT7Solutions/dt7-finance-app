@@ -203,15 +203,27 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
 
               // Approvals Queue List
               Expanded(
-                child: displayList.isEmpty
-                    ? Center(
-                        child: Text(
-                          'No ${_selectedTab.toLowerCase()} approvals',
-                          style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: displayList.length,
+                child: RefreshIndicator(
+                  onRefresh: _loadApprovals,
+                  color: AppColors.primary,
+                  child: displayList.isEmpty
+                      ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: [
+                            SizedBox(
+                              height: MediaQuery.of(context).size.height * 0.4,
+                              child: Center(
+                                child: Text(
+                                  'No ${_selectedTab.toLowerCase()} approvals',
+                                  style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      : ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          itemCount: displayList.length,
                         itemBuilder: (ctx, idx) {
                           final item = displayList[idx];
                           return Container(
@@ -317,6 +329,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                           );
                         },
                       ),
+                ),
               ),
             ],
           ),
