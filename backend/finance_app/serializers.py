@@ -47,10 +47,15 @@ class BudgetAllocationSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at']
 
 
+from django.utils import timezone
+
 class ExpenseSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source='user.username', read_only=True)
     category_name = serializers.CharField(source='category.name', read_only=True)
     category_color = serializers.CharField(source='category.color', read_only=True)
+    date_time = serializers.DateTimeField(required=False, default=timezone.now)
+    category = serializers.PrimaryKeyRelatedField(queryset=Category.objects.all(), required=False, allow_null=True)
+    user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=False, allow_null=True)
 
     class Meta:
         model = Expense

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../models/expense_model.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
@@ -23,6 +24,7 @@ class MyExpensesScreen extends StatefulWidget {
 class _MyExpensesScreenState extends State<MyExpensesScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   List<ExpenseModel> _expenses = [];
+  bool _isLoading = true;
   String _selectedFilter = 'All';
   String _categoryFilter = 'All';
   String _statusFilter = 'All';
@@ -34,10 +36,25 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
   }
 
   Future<void> _loadExpenses() async {
+    final currentUser = await ApiService.getCurrentUser();
     final list = await ApiService.getExpenses();
+
+    final userExpenses = list.where((e) {
+      if (currentUser == null) return true;
+      final uName = currentUser.username.toLowerCase();
+      final fName = currentUser.fullName.toLowerCase();
+      final expUser = e.userName.toLowerCase();
+      return expUser == uName ||
+          expUser == fName ||
+          expUser == 'current employee' ||
+          (uName.isNotEmpty && expUser.contains(uName)) ||
+          (fName.isNotEmpty && expUser.contains(fName));
+    }).toList();
+
     if (mounted) {
       setState(() {
-        _expenses = list;
+        _expenses = userExpenses.isNotEmpty ? userExpenses : list;
+        _isLoading = false;
       });
     }
   }
@@ -46,7 +63,17 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
     final titleController = TextEditingController(text: exp.title);
     final amountController = TextEditingController(text: exp.amount.toStringAsFixed(0));
     String selectedCategory = exp.categoryName;
-    final categories = ['Travel', 'Food', 'Fuel', 'Office', 'Misc'];
+    final categories = [
+      'Software Tools',
+      'AI Subscriptions',
+      'Purchase of Domain or Server',
+      'Cloud Infrastructure & Hosting',
+      'API & Third-Party Services',
+      'Hardware & Dev Peripherals',
+      'Travel & Client Visits',
+      'Office Supplies & Utilities',
+      'Others',
+    ];
 
     showModalBottomSheet(
       context: context,
@@ -106,6 +133,7 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
+                        runSpacing: 8,
                         children: categories.map((cat) {
                           final isSel = selectedCategory == cat;
                           return ChoiceChip(
@@ -140,7 +168,7 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
                               amount: newAmount,
                               categoryName: selectedCategory,
                             );
-                            if (mounted) {
+                            if (context.mounted) {
                               Navigator.pop(context);
                               _loadExpenses();
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -204,9 +232,7 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
             onPressed: () async {
               Navigator.pop(ctx);
               await ApiService.deleteExpense(exp.id);
-              setState(() {
-                _expenses.removeWhere((e) => e.id == exp.id);
-              });
+              _loadExpenses();
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -224,6 +250,19 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
   }
 
   void _showFilterSheet(BuildContext context) {
+    final categories = [
+      'All',
+      'Software Tools',
+      'AI Subscriptions',
+      'Purchase of Domain or Server',
+      'Cloud Infrastructure & Hosting',
+      'API & Third-Party Services',
+      'Hardware & Dev Peripherals',
+      'Travel & Client Visits',
+      'Office Supplies & Utilities',
+      'Others',
+    ];
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -265,7 +304,8 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
-                        children: ['All', 'Software Tools', 'AI Subscriptions', 'Travel', 'Fuel', 'Office'].map((cat) {
+                        runSpacing: 8,
+                        children: categories.map((cat) {
                           final isSel = _categoryFilter == cat;
                           return ChoiceChip(
                             label: Text(cat),
@@ -330,17 +370,17 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    var rawList = _expenses;
+    var rawList = List<ExpenseModel>.from(_expenses);
 
     if (_categoryFilter != 'All') {
-      rawList = rawList.where((e) => e.categoryName.toLowerCase() == _categoryFilter.toLowerCase()).toList();
+      rawList = rawList.where((e) => e.categoryName.toLowerCase().contains(_categoryFilter.toLowerCase())).toList();
     }
     if (_statusFilter != 'All') {
       rawList = rawList.where((e) => e.status.toUpperCase() == _statusFilter.toUpperCase()).toList();
     }
 
-    final displayList = rawList;
     final filters = ['All', 'This Month', 'This Week', 'Custom'];
+    final displayList = rawList;
 
     return Scaffold(
       key: _scaffoldKey,
@@ -381,6 +421,16 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
             icon: Icons.tune,
             onPressed: () => _showFilterSheet(context),
           ),
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.primary),
+            onPressed: () async {
+              final res = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AddExpenseScreen()),
+              );
+              if (res == true) _loadExpenses();
+            },
+          ),
         ],
       ),
       body: SafeArea(
@@ -420,105 +470,124 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
 
               // Expense Items List
               Expanded(
-                child: displayList.isEmpty
-                    ? Center(
-                        child: Text(
-                          'No expenses found',
-                          style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: displayList.length,
-                        itemBuilder: (ctx, idx) {
-                          final exp = displayList[idx];
-                          return InkWell(
-                            onTap: () async {
-                              final res = await Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (context) => ExpenseDetailScreen(expense: exp)),
-                              );
-                              if (res == true) {
-                                setState(() {
-                                  _expenses.removeWhere((e) => e.id == exp.id);
-                                });
-                              }
-                            },
-                            child: Container(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: Colors.grey.shade100),
-                              ),
-                              child: Column(
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Expanded(
-                                        child: Row(
-                                          children: [
-                                            Flexible(
-                                              child: Text(
-                                                exp.title,
-                                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                              decoration: BoxDecoration(
-                                                color: Colors.orange.shade50,
-                                                borderRadius: BorderRadius.circular(4),
-                                              ),
-                                              child: Text(
-                                                exp.categoryName,
-                                                style: TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.bold),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Text(
-                                        '₹${exp.amount.toStringAsFixed(0)}',
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+                    : displayList.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.receipt_long_outlined, size: 48, color: Colors.grey.shade400),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'No expenses found',
+                                  style: TextStyle(color: Colors.grey.shade700, fontSize: 15, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Tap "+" to submit your first expense claim.',
+                                  style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: displayList.length,
+                            itemBuilder: (ctx, idx) {
+                              final exp = displayList[idx];
+                              return InkWell(
+                                onTap: () async {
+                                  final res = await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (context) => ExpenseDetailScreen(expense: exp)),
+                                  );
+                                  if (res == true) {
+                                    _loadExpenses();
+                                  }
+                                },
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: Colors.grey.shade200),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.02),
+                                        blurRadius: 6,
+                                        offset: const Offset(0, 2),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 8),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  child: Column(
                                     children: [
-                                      Text(exp.dateTime, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
                                       Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
-                                          StatusBadge(status: exp.status),
-                                          const SizedBox(width: 8),
-                                          IconButton(
-                                            icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
-                                            onPressed: () => _showEditExpenseSheet(context, exp),
-                                            constraints: const BoxConstraints(),
-                                            padding: const EdgeInsets.all(4),
+                                          Expanded(
+                                            child: Row(
+                                              children: [
+                                                Flexible(
+                                                  child: Text(
+                                                    exp.title,
+                                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors.primaryLight,
+                                                    borderRadius: BorderRadius.circular(4),
+                                                  ),
+                                                  child: Text(
+                                                    exp.categoryName,
+                                                    style: const TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.bold),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
-                                          const SizedBox(width: 4),
-                                          IconButton(
-                                            icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
-                                            onPressed: () => _showDeleteConfirmationDialog(context, exp),
-                                            constraints: const BoxConstraints(),
-                                            padding: const EdgeInsets.all(4),
+                                          Text(
+                                            '₹${exp.amount.toStringAsFixed(0)}',
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(exp.dateTime, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                                          Row(
+                                            children: [
+                                              StatusBadge(status: exp.status),
+                                              const SizedBox(width: 8),
+                                              IconButton(
+                                                icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
+                                                onPressed: () => _showEditExpenseSheet(context, exp),
+                                                constraints: const BoxConstraints(),
+                                                padding: const EdgeInsets.all(4),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              IconButton(
+                                                icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                                                onPressed: () => _showDeleteConfirmationDialog(context, exp),
+                                                constraints: const BoxConstraints(),
+                                                padding: const EdgeInsets.all(4),
+                                              ),
+                                            ],
                                           ),
                                         ],
                                       ),
                                     ],
                                   ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
+                                ),
+                              );
+                            },
+                          ),
               ),
             ],
           ),

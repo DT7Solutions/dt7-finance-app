@@ -10,7 +10,10 @@ class DT7AgencyFinanceTests(TestCase):
         self.user = User.objects.create_user(username='johndoe', password='password123', email='john.doe@example.com')
         self.client.force_authenticate(user=self.user)
 
-        self.profile = UserProfile.objects.create(user=self.user, role='EMPLOYEE', department='Sales Department', employee_id='DT7EMP001')
+        self.profile, _ = UserProfile.objects.get_or_create(
+            user=self.user,
+            defaults={'role': 'EMPLOYEE', 'department': 'Sales Department', 'employee_id': 'DT7EMP001'}
+        )
         self.category = Category.objects.create(name='Fuel', type='EXPENSE', icon='local_gas_station', color='#F59E0B')
 
     def test_budget_allocation(self):

@@ -8,6 +8,7 @@ import '../widgets/custom_button.dart';
 import '02_login_screen.dart';
 import '07_add_expense_screen.dart';
 import '08_my_expenses_screen.dart';
+import '09_expense_detail_screen.dart';
 import '10_expense_history_screen.dart';
 import '15_profile_screen.dart';
 
@@ -24,6 +25,9 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
   UserModel? _currentUser;
   String? _profilePhotoUrl;
   bool _isLoading = true;
+  double _approvedTotal = 0.0;
+  double _pendingTotal = 0.0;
+  double _rejectedTotal = 0.0;
 
   @override
   void initState() {
@@ -32,45 +36,63 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
   }
 
   Future<void> _loadData() async {
-    final user = await ApiService.getCurrentUser();
-    final expenses = await ApiService.getExpenses();
-    final photo = await AuthService.getProfilePhoto();
+    try {
+      final user = await ApiService.getCurrentUser();
+      final expenses = await ApiService.getExpenses();
+      final photo = await AuthService.getProfilePhoto();
 
-    final allocated = user?.allocatedAmount ?? 0.0;
-    final userExpenses = expenses.where((e) {
-      final uName = (user?.username ?? '').toLowerCase();
-      final fName = (user?.fullName ?? '').toLowerCase();
-      final expUser = e.userName.toLowerCase();
-      return expUser == uName || expUser == fName || (uName.isNotEmpty && expUser.contains(uName));
-    }).toList();
+      final allocated = user?.allocatedAmount ?? 0.0;
+      final userExpenses = expenses.where((e) {
+        final uName = (user?.username ?? '').toLowerCase();
+        final fName = (user?.fullName ?? '').toLowerCase();
+        final expUser = e.userName.toLowerCase();
+        return expUser == uName ||
+            expUser == fName ||
+            expUser == 'current employee' ||
+            (uName.isNotEmpty && expUser.contains(uName)) ||
+            (fName.isNotEmpty && expUser.contains(fName));
+      }).toList();
 
-    final totalUsed = userExpenses.isNotEmpty
-        ? userExpenses.fold(0.0, (sum, exp) => sum + exp.amount)
-        : (user?.usedAmount ?? 0.0);
+      final activeExpenses = userExpenses.isNotEmpty ? userExpenses : expenses;
 
-    final remaining = allocated - totalUsed;
+      final approvedSum = activeExpenses.where((e) => e.isApproved).fold(0.0, (sum, exp) => sum + exp.amount);
+      final pendingSum = activeExpenses.where((e) => e.isPending).fold(0.0, (sum, exp) => sum + exp.amount);
+      final rejectedSum = activeExpenses.where((e) => e.isRejected).fold(0.0, (sum, exp) => sum + exp.amount);
 
-    if (mounted) {
-      setState(() {
-        _profilePhotoUrl = photo;
-        _currentUser = user != null
-            ? UserModel(
-                id: user.id,
-                username: user.username,
-                email: user.email,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                role: user.role,
-                department: user.department,
-                employeeId: user.employeeId,
-                allocatedAmount: allocated,
-                usedAmount: totalUsed,
-                remainingAmount: remaining,
-              )
-            : null;
-        _recentExpenses = userExpenses.isNotEmpty ? userExpenses.take(5).toList() : expenses.take(5).toList();
-        _isLoading = false;
-      });
+      final totalUsed = approvedSum;
+      final remaining = allocated - totalUsed;
+
+      if (mounted) {
+        setState(() {
+          _approvedTotal = approvedSum;
+          _pendingTotal = pendingSum;
+          _rejectedTotal = rejectedSum;
+          _profilePhotoUrl = photo;
+          _currentUser = user != null
+              ? UserModel(
+                  id: user.id,
+                  username: user.username,
+                  email: user.email,
+                  firstName: user.firstName,
+                  lastName: user.lastName,
+                  role: user.role,
+                  department: user.department,
+                  employeeId: user.employeeId,
+                  allocatedAmount: allocated,
+                  usedAmount: totalUsed,
+                  remainingAmount: remaining,
+                )
+              : null;
+          _recentExpenses = activeExpenses.take(5).toList();
+        });
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -340,6 +362,68 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
                 ],
               ),
             ),
+            const SizedBox(height: 12),
+
+            // Pending & Rejected Budget Breakdown Row
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFFBEB),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFFCD34D)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: const [
+                            Icon(Icons.hourglass_empty_rounded, size: 14, color: Color(0xFFD97706)),
+                            SizedBox(width: 4),
+                            Text('Pending Claims', style: TextStyle(fontSize: 11, color: Color(0xFFB45309), fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '₹${_pendingTotal.toStringAsFixed(0)}',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF92400E)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF2F2),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFFCA5A5)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: const [
+                            Icon(Icons.cancel_outlined, size: 14, color: Colors.redAccent),
+                            SizedBox(width: 4),
+                            Text('Rejected Claims', style: TextStyle(fontSize: 11, color: Color(0xFF991B1B), fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '₹${_rejectedTotal.toStringAsFixed(0)}',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFFDC2626)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 24),
 
             // Quick Actions
@@ -436,6 +520,17 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
                         margin: const EdgeInsets.only(bottom: 10),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         child: ListTile(
+                          onTap: () async {
+                            final res = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ExpenseDetailScreen(expense: exp),
+                              ),
+                            );
+                            if (res == true) {
+                              _loadData();
+                            }
+                          },
                           leading: CircleAvatar(
                             backgroundColor: AppColors.primaryLight,
                             child: const Icon(Icons.receipt, color: AppColors.primary, size: 20),

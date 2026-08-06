@@ -149,46 +149,58 @@ class _AllocateBudgetScreenState extends State<AllocateBudgetScreen> {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  DropdownButtonFormField<int>(
-                    value: _selectedEmployeeId,
-                    icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF1F2937)),
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey.shade200),
+                  () {
+                    final rawUsers = _users.isNotEmpty
+                        ? _users
+                        : [
+                            UserModel(id: 1, username: 'john_doe', email: 'john.doe@example.com', firstName: 'John', lastName: 'Doe'),
+                            UserModel(id: 2, username: 'rahul_sharma', email: 'rahul@example.com', firstName: 'Rahul', lastName: 'Sharma'),
+                          ];
+                    final Map<int, UserModel> uniqueUserMap = {};
+                    for (final u in rawUsers) {
+                      uniqueUserMap.putIfAbsent(u.id, () => u);
+                    }
+                    final userList = uniqueUserMap.values.toList();
+                    final effVal = (userList.any((u) => u.id == _selectedEmployeeId))
+                        ? _selectedEmployeeId
+                        : (userList.isNotEmpty ? userList.first.id : null);
+
+                    return DropdownButtonFormField<int>(
+                      value: effVal,
+                      icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF1F2937)),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade200),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade200),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                        ),
                       ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey.shade200),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-                      ),
-                    ),
-                    items: (_users.isNotEmpty
-                            ? _users
-                            : [
-                                UserModel(id: 1, username: 'john_doe', email: 'john.doe@example.com', firstName: 'John', lastName: 'Doe'),
-                                UserModel(id: 2, username: 'rahul_sharma', email: 'rahul@example.com', firstName: 'Rahul', lastName: 'Sharma'),
-                              ])
-                        .map((u) => DropdownMenuItem(
-                              value: u.id,
-                              child: Text(
-                                u.fullName,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF1F2937),
+                      items: userList
+                          .map((u) => DropdownMenuItem(
+                                value: u.id,
+                                child: Text(
+                                  u.fullName,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF1F2937),
+                                  ),
                                 ),
-                              ),
-                            ))
-                        .toList(),
-                    onChanged: (val) => setState(() => _selectedEmployeeId = val),
-                  ),
+                              ))
+                          .toList(),
+                      onChanged: (val) => setState(() => _selectedEmployeeId = val),
+                    );
+                  }(),
                   const SizedBox(height: 20),
 
                   // Dynamic Current Balance Card

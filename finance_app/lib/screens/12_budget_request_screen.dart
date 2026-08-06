@@ -99,20 +99,32 @@ class _BudgetRequestScreenState extends State<BudgetRequestScreen> {
 
               const Text('Category', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
               const SizedBox(height: 6),
-              DropdownButtonFormField<int>(
-                value: _selectedCategoryId,
-                decoration: const InputDecoration(border: OutlineInputBorder()),
-                items: (_categories.isNotEmpty
-                        ? _categories
-                        : [
-                            CategoryModel(id: 1, name: 'Software Tools', type: 'EXPENSE', icon: 'computer', color: '#8B5CF6'),
-                            CategoryModel(id: 2, name: 'AI Subscriptions', type: 'EXPENSE', icon: 'psychology', color: '#EC4899'),
-                            CategoryModel(id: 3, name: 'Travel & Transport', type: 'EXPENSE', icon: 'directions_car', color: '#3B82F6'),
-                          ])
-                    .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
-                    .toList(),
-                onChanged: (val) => setState(() => _selectedCategoryId = val),
-              ),
+              () {
+                final raw = _categories.isNotEmpty
+                    ? _categories
+                    : [
+                        CategoryModel(id: 1, name: 'Software Tools', type: 'EXPENSE', icon: 'computer', color: '#8B5CF6'),
+                        CategoryModel(id: 2, name: 'AI Subscriptions', type: 'EXPENSE', icon: 'psychology', color: '#EC4899'),
+                        CategoryModel(id: 3, name: 'Travel & Transport', type: 'EXPENSE', icon: 'directions_car', color: '#3B82F6'),
+                      ];
+                final Map<int, CategoryModel> uniqueMap = {};
+                for (final c in raw) {
+                  uniqueMap.putIfAbsent(c.id, () => c);
+                }
+                final categoryList = uniqueMap.values.toList();
+                final effVal = (categoryList.any((c) => c.id == _selectedCategoryId))
+                    ? _selectedCategoryId
+                    : (categoryList.isNotEmpty ? categoryList.first.id : null);
+
+                return DropdownButtonFormField<int>(
+                  value: effVal,
+                  decoration: const InputDecoration(border: OutlineInputBorder()),
+                  items: categoryList
+                      .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
+                      .toList(),
+                  onChanged: (val) => setState(() => _selectedCategoryId = val),
+                );
+              }(),
               const SizedBox(height: 14),
 
               CustomTextField(

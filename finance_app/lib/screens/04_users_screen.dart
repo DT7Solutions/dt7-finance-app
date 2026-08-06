@@ -433,21 +433,6 @@ class _UsersScreenState extends State<UsersScreen> {
                           ),
                         ),
                         const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          value: selectedRole,
-                          decoration: InputDecoration(
-                            labelText: 'User Role',
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                          items: const [
-                            DropdownMenuItem(value: 'EMPLOYEE', child: Text('Employee')),
-                            DropdownMenuItem(value: 'ADMIN', child: Text('Admin / Founder')),
-                          ],
-                          onChanged: (val) {
-                            if (val != null) setModalState(() => selectedRole = val);
-                          },
-                        ),
-                        const SizedBox(height: 12),
                         TextField(
                           controller: passwordCtrl,
                           obscureText: obscurePassword,
@@ -514,7 +499,7 @@ class _UsersScreenState extends State<UsersScreen> {
                                 email: email,
                                 password: password,
                                 fullName: fullName,
-                                role: selectedRole,
+                                role: 'EMPLOYEE',
                               );
 
                         if (context.mounted) {
@@ -598,23 +583,6 @@ class _UsersScreenState extends State<UsersScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: selectedRole,
-                    decoration: InputDecoration(
-                      labelText: 'Role',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'EMPLOYEE', child: Text('Employee')),
-                      DropdownMenuItem(value: 'ADMIN', child: Text('Admin / Founder')),
-                    ],
-                    onChanged: (val) {
-                      if (val != null) {
-                        setModalState(() => selectedRole = val);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 12),
                   TextField(
                     controller: passwordCtrl,
                     obscureText: obscureEditPassword,
@@ -669,7 +637,7 @@ class _UsersScreenState extends State<UsersScreen> {
                           id: user.id,
                           fullName: fullName,
                           email: email,
-                          role: selectedRole,
+                          role: user.role,
                           allocatedAmount: allocated,
                           password: passwordCtrl.text.trim().isNotEmpty ? passwordCtrl.text.trim() : null,
                         );
@@ -687,6 +655,24 @@ class _UsersScreenState extends State<UsersScreen> {
                       },
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.redAccent,
+                        side: const BorderSide(color: Colors.redAccent),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      label: const Text('Delete User Account', style: TextStyle(fontWeight: FontWeight.bold)),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _handleDeleteUser(user);
+                      },
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -694,6 +680,74 @@ class _UsersScreenState extends State<UsersScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _handleDeleteUser(UserModel user) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 24),
+            ),
+            const SizedBox(width: 12),
+            const Text('Confirm User Deletion', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Are you sure you want to permanently delete user "${user.fullName}"?',
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF111827)),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Email: ${user.email}\nThis operation will remove the user account and revoke all access. This action cannot be undone.',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            ),
+          ],
+        ),
+        actions: [
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.black87)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Yes, Delete User', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await ApiService.deleteUser(user.id);
+      _loadUsers();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('User "${user.fullName}" deleted successfully!'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -853,11 +907,16 @@ class _UsersScreenState extends State<UsersScreen> {
                               ),
                             ],
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 4),
                           IconButton(
                             icon: const Icon(Icons.edit_outlined, color: AppColors.primary, size: 20),
                             onPressed: () => _showEditUserModal(u),
                             tooltip: 'Edit User',
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                            onPressed: () => _handleDeleteUser(u),
+                            tooltip: 'Delete User',
                           ),
                         ],
                       ),

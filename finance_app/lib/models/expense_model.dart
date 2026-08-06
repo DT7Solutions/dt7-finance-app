@@ -11,6 +11,8 @@ class ExpenseModel {
   final String status; // 'PENDING', 'APPROVED', 'REJECTED'
   final String paymentMode;
   final String? receiptImage;
+  final String approvedBy;
+  final String approvalDate;
 
   ExpenseModel({
     required this.id,
@@ -25,6 +27,8 @@ class ExpenseModel {
     this.status = 'PENDING',
     this.paymentMode = 'Cash',
     this.receiptImage,
+    this.approvedBy = '',
+    this.approvalDate = '',
   });
 
   factory ExpenseModel.fromJson(Map<String, dynamic> json) {
@@ -33,14 +37,16 @@ class ExpenseModel {
       title: json['title'] ?? '',
       amount: double.tryParse(json['amount'].toString()) ?? 0.0,
       categoryId: json['category'],
-      categoryName: json['category_name'] ?? 'General',
+      categoryName: json['category_name'] ?? (json['category_details'] is Map ? json['category_details']['name'] : 'General'),
       categoryColor: json['category_color'] ?? '#FF5500',
-      userName: json['user_name'] ?? '',
-      description: json['description'] ?? '',
-      dateTime: json['date_time'] ?? '',
-      status: json['status'] ?? 'PENDING',
+      userName: json['user_name'] ?? (json['employee_name'] ?? ''),
+      description: json['description'] ?? json['note'] ?? '',
+      dateTime: json['date_time'] ?? json['created_at'] ?? json['date'] ?? '',
+      status: (json['status'] ?? 'PENDING').toString().toUpperCase(),
       paymentMode: json['payment_mode'] ?? 'Cash',
-      receiptImage: json['receipt_image'],
+      receiptImage: json['receipt_image'] ?? json['receipt'] ?? json['bill_image'],
+      approvedBy: json['approved_by'] ?? json['reviewed_by'] ?? '',
+      approvalDate: json['approval_date'] ?? json['reviewed_at'] ?? '',
     );
   }
 
@@ -58,6 +64,8 @@ class ExpenseModel {
       'status': status,
       'payment_mode': paymentMode,
       'receipt_image': receiptImage,
+      'approved_by': approvedBy,
+      'approval_date': approvalDate,
     };
   }
 

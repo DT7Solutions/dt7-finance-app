@@ -34,6 +34,8 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
   String _selectedFilter = 'This Month';
   Map<String, dynamic>? _dashboardData;
   List<ExpenseModel> _allExpenses = [];
+  UserModel? _currentUser;
+  String? _profilePhotoUrl;
   bool _isLoading = false;
 
   @override
@@ -272,8 +274,12 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
   Future<void> _loadDashboard() async {
     final data = await ApiService.getFounderDashboard();
     final expenses = await ApiService.getExpenses();
+    final user = await ApiService.getCurrentUser();
+    final photo = await AuthService.getProfilePhoto();
     if (mounted) {
       setState(() {
+        _currentUser = user;
+        _profilePhotoUrl = photo;
         _dashboardData = data;
         _allExpenses = expenses;
         _isLoading = false;
@@ -559,21 +565,6 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: selectedRole,
-                    decoration: InputDecoration(
-                      labelText: 'User Role',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'EMPLOYEE', child: Text('Employee')),
-                      DropdownMenuItem(value: 'ADMIN', child: Text('Admin / Founder')),
-                    ],
-                    onChanged: (val) {
-                      if (val != null) setModalState(() => selectedRole = val);
-                    },
-                  ),
-                  const SizedBox(height: 12),
                   TextField(
                     controller: passwordCtrl,
                     obscureText: obscurePassword,
@@ -640,7 +631,7 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                           email: email,
                           password: password,
                           fullName: fullName,
-                          role: selectedRole,
+                          role: 'EMPLOYEE',
                         );
 
                         final amount = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
@@ -1061,16 +1052,16 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
-                            children: const [
+                            children: [
                               Text(
-                                'Hello, Founder ',
-                                style: TextStyle(
+                                'Hello, ${_currentUser?.fullName.isNotEmpty == true ? _currentUser!.fullName : (_currentUser?.firstName.isNotEmpty == true ? _currentUser!.firstName : (_currentUser?.username.isNotEmpty == true ? _currentUser!.username : "Founder"))} ',
+                                style: const TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.bold,
                                   color: Color(0xFF1F2937),
                                 ),
                               ),
-                              Text('👋', style: TextStyle(fontSize: 15)),
+                              const Text('👋', style: TextStyle(fontSize: 15)),
                             ],
                           ),
                           const SizedBox(height: 2),

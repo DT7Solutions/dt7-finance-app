@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_service.dart';
 import '../models/user_model.dart';
@@ -34,7 +36,7 @@ class ApiService {
   }
 
   static Future<void> _ensureUsersLoaded() async {
-    if (_usersLoaded && _storedUsers.isNotEmpty) return;
+    if (_storedUsers.isNotEmpty) return;
     _usersLoaded = true;
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -44,7 +46,6 @@ class ApiService {
         final loaded = dynamicList.map((i) => UserModel.fromJson(Map<String, dynamic>.from(i))).toList();
         _storedUsers.clear();
         _storedUsers.addAll(loaded);
-        return;
       }
     } catch (_) {}
   }
@@ -134,13 +135,48 @@ class ApiService {
     final rawName = await AuthService.getCurrentUsername();
     final cleanInput = rawName.trim().toLowerCase();
     final users = await getUsers();
+    if (users.isEmpty) return null;
 
+    if (cleanInput.isNotEmpty) {
+      // 1. Exact match by username or email
+      for (var u in users) {
+        if (u.username.toLowerCase() == cleanInput || u.email.toLowerCase() == cleanInput) {
+          return u;
+        }
+      }
+
+      // 2. Fuzzy match by username prefix, email prefix, firstName, or employeeId
+      final prefix = cleanInput.contains('@') ? cleanInput.split('@').first : cleanInput;
+      for (var u in users) {
+        final uName = u.username.toLowerCase();
+        final uEmail = u.email.toLowerCase();
+        final uFirst = u.firstName.toLowerCase();
+        final uFull = u.fullName.toLowerCase();
+        final uEmpId = u.employeeId.toLowerCase();
+
+        if (uName.contains(prefix) ||
+            prefix.contains(uName) ||
+            uEmail.startsWith(prefix) ||
+            (uFirst.isNotEmpty && (uFirst == prefix || prefix.contains(uFirst))) ||
+            (uFull.isNotEmpty && (uFull.contains(prefix) || prefix.contains(uFirst))) ||
+            (uEmpId.isNotEmpty && uEmpId == cleanInput)) {
+          return u;
+        }
+      }
+    }
+
+    // 3. Role-based fallback matching
+    final role = await AuthService.getUserRole();
     for (var u in users) {
-      if (u.email.toLowerCase() == cleanInput || u.username.toLowerCase() == cleanInput) {
+      if (role == 'EMPLOYEE' && (u.role == 'EMPLOYEE' || !u.isAdmin)) {
+        return u;
+      }
+      if ((role == 'FOUNDER' || role == 'ADMIN') && (u.role == 'ADMIN' || u.role == 'FOUNDER' || u.isAdmin)) {
         return u;
       }
     }
-    return users.isNotEmpty ? users.first : null;
+
+    return users.first;
   }
 
   static Future<bool> addUser({
@@ -251,28 +287,76 @@ class ApiService {
     return true;
   }
 
-  // --- CATEGORIES ---
+  static Future<bool> deleteUser(int userId) async {
+    await _ensureUsersLoaded();
+    _storedUsers.removeWhere((u) => u.id == userId);
+    await _saveUsersToPrefs();
+
+    for (final hostUrl in AuthService.candidateUrls) {
+      final url = Uri.parse('$hostUrl/users/$userId/');
+      try {
+        final response = await http.delete(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 1000));
+        if (response.statusCode == 200 || response.statusCode == 204) {
+          AuthService.setActiveBaseUrl(hostUrl);
+          break;
+        }
+      } catch (_) {}
+    }
+    return true;
+  }
+
+  static final List<CategoryModel> _defaultCategories = [
+    CategoryModel(id: 1, name: 'Software Tools', type: 'EXPENSE', icon: 'computer', color: '#8B5CF6'),
+    CategoryModel(id: 2, name: 'AI Subscriptions', type: 'EXPENSE', icon: 'psychology', color: '#EC4899'),
+    CategoryModel(id: 3, name: 'Purchase of Domain or Server', type: 'EXPENSE', icon: 'dns', color: '#2563EB'),
+    CategoryModel(id: 4, name: 'Cloud Infrastructure & Hosting', type: 'EXPENSE', icon: 'cloud', color: '#0EA5E9'),
+    CategoryModel(id: 5, name: 'API & Third-Party Services', type: 'EXPENSE', icon: 'api', color: '#10B981'),
+    CategoryModel(id: 6, name: 'Hardware & Dev Peripherals', type: 'EXPENSE', icon: 'devices', color: '#6366F1'),
+    CategoryModel(id: 7, name: 'Travel & Client Visits', type: 'EXPENSE', icon: 'directions_car', color: '#F59E0B'),
+    CategoryModel(id: 8, name: 'Office Supplies & Utilities', type: 'EXPENSE', icon: 'shopping_bag', color: '#64748B'),
+    CategoryModel(id: 9, name: 'Others', type: 'EXPENSE', icon: 'more_horiz', color: '#9CA3AF'),
+  ];
+
   static Future<List<CategoryModel>> getCategories() async {
-    for (final hostUrl in AuthService.candidateBaseUrls) {
+    List<CategoryModel> fetchedCategories = [];
+
+    for (final hostUrl in AuthService.candidateUrls) {
       final url = Uri.parse('$hostUrl/categories/');
       try {
-        final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 2000));
+        final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 500));
         if (response.statusCode == 200) {
+          AuthService.setActiveBaseUrl(hostUrl);
           final data = jsonDecode(response.body);
           final results = data['results'] ?? data;
           if (results is List && results.isNotEmpty) {
-            return (results).map((i) => CategoryModel.fromJson(i)).toList();
+            fetchedCategories = (results).map((i) => CategoryModel.fromJson(i)).toList();
+            break;
           }
         }
       } catch (_) {}
     }
-    return [
-      CategoryModel(id: 1, name: 'Software Tools', type: 'EXPENSE', icon: 'computer', color: '#8B5CF6'),
-      CategoryModel(id: 2, name: 'AI Subscriptions', type: 'EXPENSE', icon: 'psychology', color: '#EC4899'),
-      CategoryModel(id: 3, name: 'Travel & Transport', type: 'EXPENSE', icon: 'directions_car', color: '#2563EB'),
-      CategoryModel(id: 4, name: 'Office Supplies', type: 'EXPENSE', icon: 'shopping_bag', color: '#F59E0B'),
-      CategoryModel(id: 5, name: 'Fuel', type: 'EXPENSE', icon: 'local_gas_station', color: '#10B981'),
-    ];
+
+    // Filter out obsolete legacy categories (Food, Freelance, Healthcare, Education, etc.)
+    final obsoleteKeywords = {'food', 'freelance', 'healthcare', 'education', 'entertainment', 'housing', 'investment'};
+    final cleanFetched = fetchedCategories.where((c) {
+      final lName = c.name.toLowerCase();
+      return !obsoleteKeywords.any((k) => lName.contains(k));
+    }).toList();
+
+    // If cleanFetched is empty or missing modern software categories, return standard software company categories
+    if (cleanFetched.isEmpty) {
+      return List.from(_defaultCategories);
+    }
+
+    // Ensure software categories are merged cleanly
+    final existingNames = cleanFetched.map((c) => c.name.toLowerCase()).toSet();
+    final merged = List<CategoryModel>.from(cleanFetched);
+    for (var def in _defaultCategories) {
+      if (!existingNames.contains(def.name.toLowerCase())) {
+        merged.add(def);
+      }
+    }
+    return merged;
   }
 
   // --- BUDGET ALLOCATION ---
@@ -333,7 +417,7 @@ class ApiService {
   }
 
   static Future<void> _ensureExpensesLoaded() async {
-    if (_expensesLoaded && _storedExpenses.isNotEmpty) return;
+    if (_storedExpenses.isNotEmpty) return;
     _expensesLoaded = true;
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -343,7 +427,6 @@ class ApiService {
         final loaded = dynamicList.map((i) => ExpenseModel.fromJson(Map<String, dynamic>.from(i))).toList();
         _storedExpenses.clear();
         _storedExpenses.addAll(loaded);
-        return;
       }
     } catch (_) {}
   }
@@ -404,13 +487,18 @@ class ApiService {
   }) async {
     await _ensureExpensesLoaded();
 
-    final catName = categoryId == 1
-        ? 'Travel & Transport'
-        : categoryId == 2
-            ? 'Meals & Entertainment'
-            : categoryId == 3
-                ? 'Office Supplies'
-                : 'Software & Tools';
+    final Map<int, String> categoryNames = {
+      1: 'Software Tools',
+      2: 'AI Subscriptions',
+      3: 'Purchase of Domain or Server',
+      4: 'Cloud Infrastructure & Hosting',
+      5: 'API & Third-Party Services',
+      6: 'Hardware & Dev Peripherals',
+      7: 'Travel & Client Visits',
+      8: 'Office Supplies & Utilities',
+      9: 'Others',
+    };
+    final catName = categoryNames[categoryId] ?? 'Software Tools';
 
     final now = DateTime.now();
     final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -418,9 +506,49 @@ class ApiService {
     final dateStr = '${now.day.toString().padLeft(2, '0')} ${months[now.month - 1]} ${now.year}, $timeStr';
 
     final currentUser = await getCurrentUser();
+    final uName = currentUser?.username ?? '';
+    final fName = currentUser?.fullName ?? '';
+    final expUser = uName.isNotEmpty ? uName : (fName.isNotEmpty ? fName : 'Current Employee');
     final newId = DateTime.now().millisecondsSinceEpoch % 1000000;
+    int realDbId = newId;
+
+    for (final hostUrl in AuthService.candidateUrls) {
+      final url = Uri.parse('$hostUrl/expenses/');
+      try {
+        final response = await http.post(
+          url,
+          headers: await _getHeaders(),
+          body: jsonEncode({
+            'title': title,
+            'amount': amount,
+            'category_name': catName,
+            'date_time': DateTime.now().toIso8601String(),
+            'description': note ?? description ?? '',
+            'user_name': expUser,
+            'status': 'PENDING',
+            if (receiptPath != null) 'receipt_image': receiptPath,
+          }),
+        ).timeout(const Duration(milliseconds: 1000));
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          AuthService.setActiveBaseUrl(hostUrl);
+          try {
+            final body = jsonDecode(response.body);
+            if (body is Map && body['id'] != null) {
+              realDbId = int.tryParse(body['id'].toString()) ?? newId;
+            }
+          } catch (_) {}
+          break;
+        } else {
+          debugPrint('[DB SYNC] Response error ${response.statusCode}: ${response.body}');
+        }
+      } catch (e) {
+        debugPrint('[DB SYNC] Post expense error: $e');
+      }
+    }
+
     final newExp = ExpenseModel(
-      id: newId,
+      id: realDbId,
       title: title,
       amount: amount,
       categoryId: categoryId,
@@ -428,19 +556,68 @@ class ApiService {
       dateTime: dateTime ?? date ?? dateStr,
       status: 'PENDING',
       description: note ?? description ?? '',
-      userName: currentUser?.fullName ?? 'Current Employee',
+      userName: expUser,
+      receiptImage: receiptPath,
     );
 
+    _storedExpenses.removeWhere((e) => e.id == newId || e.id == realDbId);
     _storedExpenses.insert(0, newExp);
     await _saveExpensesToPrefs();
 
-    // Update currentUser usedAmount & remainingAmount
-    if (currentUser != null) {
-      final userIdx = _storedUsers.indexWhere((u) => u.id == currentUser.id || u.username == currentUser.username);
+    // Note: Used budget is ONLY updated when expense status is APPROVED by admin.
+    return true;
+  }
+
+  static Future<bool> updateExpense({
+    required int id,
+    required String title,
+    required double amount,
+    required String categoryName,
+    String? status,
+    String? approvedBy,
+    String? approvalDate,
+  }) async {
+    await _ensureExpensesLoaded();
+
+    final currentUser = await getCurrentUser();
+    final activeApprover = approvedBy ??
+        (currentUser != null && currentUser.fullName.isNotEmpty
+            ? currentUser.fullName
+            : (currentUser?.username.isNotEmpty == true ? currentUser!.username : 'Founder Admin'));
+    final activeDate = approvalDate ?? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now());
+
+    final idx = _storedExpenses.indexWhere((e) => e.id == id);
+    if (idx != -1) {
+      final existing = _storedExpenses[idx];
+      final newStatus = status ?? existing.status;
+      final isApprovalChange = status != null && (newStatus == 'APPROVED' || newStatus == 'REJECTED');
+
+      _storedExpenses[idx] = ExpenseModel(
+        id: existing.id,
+        title: title,
+        amount: amount,
+        categoryId: existing.categoryId,
+        categoryName: categoryName,
+        dateTime: existing.dateTime,
+        status: newStatus,
+        description: existing.description,
+        userName: existing.userName,
+        paymentMode: existing.paymentMode,
+        receiptImage: existing.receiptImage,
+        approvedBy: isApprovalChange ? activeApprover : existing.approvedBy,
+        approvalDate: isApprovalChange ? activeDate : existing.approvalDate,
+      );
+      await _saveExpensesToPrefs();
+
+      // Recalculate usedAmount & remainingAmount for the expense owner based ONLY on APPROVED expenses
+      final expUser = existing.userName.toLowerCase();
+      final userIdx = _storedUsers.indexWhere((u) => u.username.toLowerCase() == expUser || '${u.firstName} ${u.lastName}'.toLowerCase() == expUser);
       if (userIdx != -1) {
         final u = _storedUsers[userIdx];
-        final newUsed = u.usedAmount + amount;
-        final newRem = (u.allocatedAmount - newUsed).clamp(0.0, double.infinity);
+        final approvedSum = _storedExpenses
+            .where((e) => e.userName.toLowerCase() == expUser && e.isApproved)
+            .fold(0.0, (sum, e) => sum + e.amount);
+        final newRem = u.allocatedAmount - approvedSum;
         _storedUsers[userIdx] = UserModel(
           id: u.id,
           username: u.username,
@@ -451,61 +628,17 @@ class ApiService {
           department: u.department,
           employeeId: u.employeeId,
           allocatedAmount: u.allocatedAmount,
-          usedAmount: newUsed,
+          usedAmount: approvedSum,
           remainingAmount: newRem,
         );
+        await _saveUsersToPrefs();
       }
     }
 
-    for (final hostUrl in AuthService.candidateBaseUrls) {
-      final url = Uri.parse('$hostUrl/expenses/');
-      try {
-        await http.post(
-          url,
-          headers: await _getHeaders(),
-          body: jsonEncode({
-            'title': title,
-            'amount': amount,
-            'category': categoryId,
-            'date': date ?? dateTime ?? dateStr,
-            'note': note ?? description ?? '',
-          }),
-        ).timeout(const Duration(milliseconds: 2000));
-      } catch (_) {}
-    }
-    return true;
-  }
-
-  static Future<bool> updateExpense({
-    required int id,
-    required String title,
-    required double amount,
-    required String categoryName,
-    String? status,
-  }) async {
-    await _ensureExpensesLoaded();
-
-    final idx = _storedExpenses.indexWhere((e) => e.id == id);
-    if (idx != -1) {
-      final existing = _storedExpenses[idx];
-      _storedExpenses[idx] = ExpenseModel(
-        id: existing.id,
-        title: title,
-        amount: amount,
-        categoryId: existing.categoryId,
-        categoryName: categoryName,
-        dateTime: existing.dateTime,
-        status: status ?? existing.status,
-        description: existing.description,
-        userName: existing.userName,
-      );
-      await _saveExpensesToPrefs();
-    }
-
-    for (final hostUrl in AuthService.candidateBaseUrls) {
+    for (final hostUrl in AuthService.candidateUrls) {
       final url = Uri.parse('$hostUrl/expenses/$id/');
       try {
-        await http.patch(
+        final response = await http.patch(
           url,
           headers: await _getHeaders(),
           body: jsonEncode({
@@ -513,8 +646,16 @@ class ApiService {
             'amount': amount,
             'category_name': categoryName,
             if (status != null) 'status': status,
+            if (status != null) 'approved_by': activeApprover,
+            if (status != null) 'reviewed_by': activeApprover,
+            if (status != null) 'approval_date': activeDate,
           }),
-        ).timeout(const Duration(milliseconds: 2000));
+        ).timeout(const Duration(milliseconds: 1000));
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          AuthService.setActiveBaseUrl(hostUrl);
+          break;
+        }
       } catch (_) {}
     }
     return true;
@@ -524,10 +665,14 @@ class ApiService {
     await _ensureExpensesLoaded();
     _storedExpenses.removeWhere((e) => e.id == expenseId);
     await _saveExpensesToPrefs();
-    for (final hostUrl in AuthService.candidateBaseUrls) {
+    for (final hostUrl in AuthService.candidateUrls) {
       final url = Uri.parse('$hostUrl/expenses/$expenseId/');
       try {
-        await http.delete(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 2000));
+        final response = await http.delete(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 1000));
+        if (response.statusCode == 200 || response.statusCode == 204) {
+          AuthService.setActiveBaseUrl(hostUrl);
+          break;
+        }
       } catch (_) {}
     }
     return true;
@@ -535,15 +680,47 @@ class ApiService {
 
   // --- APPROVAL ACTIONS ---
   static Future<bool> submitApprovalAction(int id, String type, String action) async {
-    for (final hostUrl in AuthService.candidateBaseUrls) {
-      final url = Uri.parse('$hostUrl/approvals/$id/');
+    final statusStr = action == 'approve' || action == 'APPROVED' ? 'APPROVED' : 'REJECTED';
+    await _ensureExpensesLoaded();
+    final idx = _storedExpenses.indexWhere((e) => e.id == id);
+    if (idx != -1) {
+      final e = _storedExpenses[idx];
+      _storedExpenses[idx] = ExpenseModel(
+        id: e.id,
+        title: e.title,
+        amount: e.amount,
+        categoryId: e.categoryId,
+        categoryName: e.categoryName,
+        dateTime: e.dateTime,
+        status: statusStr,
+        description: e.description,
+        userName: e.userName,
+        paymentMode: e.paymentMode,
+        receiptImage: e.receiptImage,
+        approvedBy: e.approvedBy,
+        approvalDate: e.approvalDate,
+      );
+      await _saveExpensesToPrefs();
+    }
+
+    for (final hostUrl in AuthService.candidateUrls) {
+      final urlAction = Uri.parse('$hostUrl/approvals/$id/action/');
+      final urlExpense = Uri.parse('$hostUrl/expenses/$id/');
       try {
-        final response = await http.post(
-          url,
+        await http.post(
+          urlAction,
           headers: await _getHeaders(),
           body: jsonEncode({'action': action, 'type': type}),
-        ).timeout(const Duration(milliseconds: 2000));
+        ).timeout(const Duration(milliseconds: 1000));
+
+        final response = await http.patch(
+          urlExpense,
+          headers: await _getHeaders(),
+          body: jsonEncode({'status': statusStr}),
+        ).timeout(const Duration(milliseconds: 1000));
+
         if (response.statusCode == 200) {
+          AuthService.setActiveBaseUrl(hostUrl);
           return true;
         }
       } catch (_) {}
@@ -692,11 +869,12 @@ class ApiService {
 
   static Future<Map<String, dynamic>?> getEmployeeDashboard() async {
     if (await AuthService.hasRealToken()) {
-      for (final hostUrl in AuthService.candidateBaseUrls) {
+      for (final hostUrl in AuthService.candidateUrls) {
         final url = Uri.parse('$hostUrl/dashboards/employee/');
         try {
-          final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 2000));
+          final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 500));
           if (response.statusCode == 200) {
+            AuthService.setActiveBaseUrl(hostUrl);
             return jsonDecode(response.body);
           }
         } catch (_) {}

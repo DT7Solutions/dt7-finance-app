@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../models/expense_model.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
@@ -18,8 +19,30 @@ class ExpenseHistoryScreen extends StatefulWidget {
 
 class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
   List<ExpenseModel> _history = [];
+  bool _isLoading = true;
+  String _selectedPeriod = 'This Month';
   String _categoryFilter = 'All';
   String _statusFilter = 'All';
+
+  final List<String> _periodOptions = [
+    'This Month',
+    'Last Month',
+    'This Year',
+    'All Time',
+  ];
+
+  final List<String> _categoryOptions = [
+    'All',
+    'Software Tools',
+    'AI Subscriptions',
+    'Purchase of Domain or Server',
+    'Cloud Infrastructure & Hosting',
+    'API & Third-Party Services',
+    'Hardware & Dev Peripherals',
+    'Travel & Client Visits',
+    'Office Supplies & Utilities',
+    'Others',
+  ];
 
   @override
   void initState() {
@@ -28,11 +51,34 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
   }
 
   Future<void> _loadHistory() async {
-    final list = await ApiService.getExpenses();
-    if (mounted) {
-      setState(() {
-        _history = list;
-      });
+    try {
+      final currentUser = await ApiService.getCurrentUser();
+      final list = await ApiService.getExpenses();
+
+      final userExpenses = list.where((e) {
+        if (currentUser == null) return true;
+        final uName = currentUser.username.toLowerCase();
+        final fName = currentUser.fullName.toLowerCase();
+        final expUser = e.userName.toLowerCase();
+        return expUser == uName ||
+            expUser == fName ||
+            expUser == 'current employee' ||
+            (uName.isNotEmpty && expUser.contains(uName)) ||
+            (fName.isNotEmpty && expUser.contains(fName));
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _history = userExpenses.isNotEmpty ? userExpenses : list;
+        });
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -78,7 +124,8 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
-                        children: ['All', 'Software Tools', 'AI Subscriptions', 'Travel', 'Fuel', 'Office'].map((cat) {
+                        runSpacing: 8,
+                        children: _categoryOptions.map((cat) {
                           final isSel = _categoryFilter == cat;
                           return ChoiceChip(
                             label: Text(cat),
@@ -144,9 +191,31 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     var rawList = List<ExpenseModel>.from(_history);
+    final now = DateTime.now();
+
+    // Period Filter logic
+    if (_selectedPeriod == 'This Month') {
+      final curMonth = DateFormat('MMM').format(now).toLowerCase();
+      final curYear = now.year.toString();
+      rawList = rawList.where((e) {
+        final dLower = e.dateTime.toLowerCase();
+        return dLower.contains(curMonth) || dLower.contains(curYear);
+      }).toList();
+    } else if (_selectedPeriod == 'Last Month') {
+      final prevDate = DateTime(now.year, now.month - 1, 1);
+      final prevMonth = DateFormat('MMM').format(prevDate).toLowerCase();
+      rawList = rawList.where((e) {
+        return e.dateTime.toLowerCase().contains(prevMonth);
+      }).toList();
+    } else if (_selectedPeriod == 'This Year') {
+      final curYear = now.year.toString();
+      rawList = rawList.where((e) {
+        return e.dateTime.toLowerCase().contains(curYear);
+      }).toList();
+    }
 
     if (_categoryFilter != 'All') {
-      rawList = rawList.where((e) => e.categoryName.toLowerCase() == _categoryFilter.toLowerCase()).toList();
+      rawList = rawList.where((e) => e.categoryName.toLowerCase().contains(_categoryFilter.toLowerCase())).toList();
     }
     if (_statusFilter != 'All') {
       rawList = rawList.where((e) => e.status.toUpperCase() == _statusFilter.toUpperCase()).toList();
@@ -195,65 +264,140 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Period Filter Dropdown
+              // Interactive Period Filter Dropdown
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.grey.shade200)),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: const [
-                    Text('This Month', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    Icon(Icons.keyboard_arrow_down, size: 18),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.02),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
                   ],
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedPeriod,
+                    isExpanded: true,
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.primary),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1F2937)),
+                    dropdownColor: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    items: _periodOptions.map((period) {
+                      final isSel = period == _selectedPeriod;
+                      return DropdownMenuItem<String>(
+                        value: period,
+                        child: Text(
+                          period,
+                          style: TextStyle(
+                            color: isSel ? AppColors.primary : const Color(0xFF374151),
+                            fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() => _selectedPeriod = val);
+                      }
+                    },
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
 
               Expanded(
-                child: displayHistory.isEmpty
-                    ? Center(
-                        child: Text(
-                          'No expense history found',
-                          style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: displayHistory.length,
-                        itemBuilder: (ctx, idx) {
-                          final item = displayHistory[idx];
-                          return InkWell(
-                            onTap: () {
-                              Navigator.push(context, MaterialPageRoute(builder: (context) => ExpenseDetailScreen(expense: item)));
-                            },
-                            child: Container(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.grey.shade100)),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                      const SizedBox(height: 4),
-                                      Text(item.dateTime, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-                                    ],
-                                  ),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text('₹${item.amount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                      const SizedBox(height: 4),
-                                      StatusBadge(status: item.status),
-                                    ],
-                                  ),
-                                ],
-                              ),
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+                    : displayHistory.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.history_toggle_off_rounded, size: 48, color: Colors.grey.shade400),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'No expense history found',
+                                  style: TextStyle(color: Colors.grey.shade700, fontSize: 15, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Try selecting "All Time" or changing category filters.',
+                                  style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+                                ),
+                              ],
                             ),
-                          );
-                        },
-                      ),
+                          )
+                        : ListView.builder(
+                            itemCount: displayHistory.length,
+                            itemBuilder: (ctx, idx) {
+                              final item = displayHistory[idx];
+                              return InkWell(
+                                onTap: () async {
+                                  final res = await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (context) => ExpenseDetailScreen(expense: item)),
+                                  );
+                                  if (res == true) _loadHistory();
+                                },
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: Colors.grey.shade200),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.02),
+                                        blurRadius: 6,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              item.title,
+                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              '${item.categoryName} • ${item.dateTime}',
+                                              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        children: [
+                                          Text(
+                                            '₹${item.amount.toStringAsFixed(0)}',
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          StatusBadge(status: item.status),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
               ),
             ],
           ),

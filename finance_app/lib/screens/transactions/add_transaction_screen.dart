@@ -181,31 +181,53 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                   ),
                   const Text('Account', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                   const SizedBox(height: 6),
-                  DropdownButtonFormField<int>(
-                    value: _selectedAccountId,
-                    decoration: const InputDecoration(border: OutlineInputBorder()),
-                    items: _accounts
-                        .map((acc) => DropdownMenuItem(
-                              value: acc.id,
-                              child: Text('${acc.name} (\$${acc.balance.toStringAsFixed(2)})'),
-                            ))
-                        .toList(),
-                    onChanged: (val) => setState(() => _selectedAccountId = val),
-                  ),
+                  () {
+                    final Map<int, dynamic> uniqueAcc = {};
+                    for (final a in _accounts) {
+                      uniqueAcc.putIfAbsent(a.id, () => a);
+                    }
+                    final accList = uniqueAcc.values.toList();
+                    final effAccId = (accList.any((a) => a.id == _selectedAccountId))
+                        ? _selectedAccountId
+                        : (accList.isNotEmpty ? accList.first.id : null);
+
+                    return DropdownButtonFormField<int>(
+                      value: effAccId,
+                      decoration: const InputDecoration(border: OutlineInputBorder()),
+                      items: accList
+                          .map((acc) => DropdownMenuItem<int>(
+                                value: acc.id,
+                                child: Text('${acc.name} (\$${acc.balance.toStringAsFixed(2)})'),
+                              ))
+                          .toList(),
+                      onChanged: (val) => setState(() => _selectedAccountId = val),
+                    );
+                  }(),
                   const SizedBox(height: 14),
                   const Text('Category', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                   const SizedBox(height: 6),
-                  DropdownButtonFormField<int>(
-                    value: _selectedCategoryId,
-                    decoration: const InputDecoration(border: OutlineInputBorder()),
-                    items: filteredCategories
-                        .map((cat) => DropdownMenuItem(
-                              value: cat.id,
-                              child: Text(cat.name),
-                            ))
-                        .toList(),
-                    onChanged: (val) => setState(() => _selectedCategoryId = val),
-                  ),
+                  () {
+                    final Map<int, dynamic> uniqueCat = {};
+                    for (final c in filteredCategories) {
+                      uniqueCat.putIfAbsent(c.id, () => c);
+                    }
+                    final catList = uniqueCat.values.toList();
+                    final effCatId = (catList.any((c) => c.id == _selectedCategoryId))
+                        ? _selectedCategoryId
+                        : (catList.isNotEmpty ? catList.first.id : null);
+
+                    return DropdownButtonFormField<int>(
+                      value: effCatId,
+                      decoration: const InputDecoration(border: OutlineInputBorder()),
+                      items: catList
+                          .map((cat) => DropdownMenuItem<int>(
+                                value: cat.id,
+                                child: Text(cat.name),
+                              ))
+                          .toList(),
+                      onChanged: (val) => setState(() => _selectedCategoryId = val),
+                    );
+                  }(),
                   const SizedBox(height: 14),
                   const Text('Date', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                   const SizedBox(height: 6),

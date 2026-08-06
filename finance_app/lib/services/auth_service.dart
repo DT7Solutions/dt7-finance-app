@@ -9,10 +9,10 @@ class AuthService {
   static String? _activeBaseUrl;
 
   static final List<String> candidateBaseUrls = [
-    'http://192.168.0.2:8000/api/v1',
-    'http://10.0.2.2:8000/api/v1',
     'http://127.0.0.1:8000/api/v1',
     'http://localhost:8000/api/v1',
+    'http://10.0.2.2:8000/api/v1',
+    'http://192.168.0.2:8000/api/v1',
   ];
 
   static List<String> get candidateUrls {
@@ -262,5 +262,56 @@ class AuthService {
       } catch (_) {}
     }
     return null;
+  }
+
+  static Future<bool> changePassword({
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    final currentUsername = await getCurrentUsername();
+    if (currentUsername.isEmpty) return false;
+
+    final role = await authenticateUser(currentUsername, oldPassword);
+    if (role == null) {
+      return false;
+    }
+
+    for (final hostUrl in candidateUrls) {
+      final url = Uri.parse('$hostUrl/users/change_password/');
+      final token = await getToken();
+      try {
+        final response = await http.post(
+          url,
+          headers: {
+            'Content-Type': 'application/json',
+            if (token != null) 'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'username': currentUsername,
+            'old_password': oldPassword,
+            'new_password': newPassword,
+          }),
+        ).timeout(const Duration(milliseconds: 1000));
+
+        if (response.statusCode == 200) {
+          setActiveBaseUrl(hostUrl);
+          break;
+        }
+      } catch (_) {}
+    }
+
+    final user = await ApiService.getCurrentUser();
+    if (user != null) {
+      await ApiService.updateUser(
+        id: user.id,
+        fullName: user.fullName,
+        email: user.email,
+        role: user.role,
+        allocatedAmount: user.allocatedAmount,
+        password: newPassword,
+      );
+    }
+
+    return true;
   }
 }
