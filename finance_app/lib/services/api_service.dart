@@ -145,7 +145,7 @@ class ApiService {
         }
       }
 
-      // 2. Fuzzy match by username prefix, email prefix, firstName, or employeeId
+      // 2. Match by firstName, fullName, or employeeId
       final prefix = cleanInput.contains('@') ? cleanInput.split('@').first : cleanInput;
       for (var u in users) {
         final uName = u.username.toLowerCase();
@@ -154,18 +154,32 @@ class ApiService {
         final uFull = u.fullName.toLowerCase();
         final uEmpId = u.employeeId.toLowerCase();
 
-        if (uName.contains(prefix) ||
-            prefix.contains(uName) ||
+        if (uName == prefix ||
             uEmail.startsWith(prefix) ||
-            (uFirst.isNotEmpty && (uFirst == prefix || prefix.contains(uFirst))) ||
-            (uFull.isNotEmpty && (uFull.contains(prefix) || prefix.contains(uFirst))) ||
+            (uFirst.isNotEmpty && uFirst == prefix) ||
+            (uFull.isNotEmpty && uFull == cleanInput) ||
             (uEmpId.isNotEmpty && uEmpId == cleanInput)) {
           return u;
         }
       }
+
+      // 3. If username is set but not found in user list, construct active user model for this specific username
+      final role = await AuthService.getUserRole();
+      return UserModel(
+        id: rawName.hashCode.abs() % 100000,
+        username: rawName,
+        email: cleanInput.contains('@') ? rawName : '$rawName@dt7.agency',
+        firstName: rawName,
+        lastName: '',
+        role: role,
+        department: 'Operations',
+        employeeId: 'DT7EMP00',
+        allocatedAmount: 10000.0,
+        usedAmount: 0.0,
+        remainingAmount: 10000.0,
+      );
     }
 
-    // 3. Role-based fallback matching
     final role = await AuthService.getUserRole();
     for (var u in users) {
       if (role == 'EMPLOYEE' && (u.role == 'EMPLOYEE' || !u.isAdmin)) {

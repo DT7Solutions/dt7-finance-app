@@ -56,20 +56,20 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
       final list = await ApiService.getExpenses();
 
       final userExpenses = list.where((e) {
-        if (currentUser == null) return true;
-        final uName = currentUser.username.toLowerCase();
-        final fName = currentUser.fullName.toLowerCase();
-        final expUser = e.userName.toLowerCase();
-        return expUser == uName ||
-            expUser == fName ||
-            expUser == 'current employee' ||
+        if (currentUser == null) return false;
+        final uName = currentUser.username.trim().toLowerCase();
+        final fName = currentUser.fullName.trim().toLowerCase();
+        final expUser = e.userName.trim().toLowerCase();
+
+        return (uName.isNotEmpty && expUser == uName) ||
+            (fName.isNotEmpty && expUser == fName) ||
             (uName.isNotEmpty && expUser.contains(uName)) ||
             (fName.isNotEmpty && expUser.contains(fName));
       }).toList();
 
       if (mounted) {
         setState(() {
-          _history = userExpenses.isNotEmpty ? userExpenses : list;
+          _history = userExpenses;
         });
       }
     } catch (_) {

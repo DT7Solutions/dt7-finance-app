@@ -43,17 +43,17 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
 
       final allocated = user?.allocatedAmount ?? 0.0;
       final userExpenses = expenses.where((e) {
-        final uName = (user?.username ?? '').toLowerCase();
-        final fName = (user?.fullName ?? '').toLowerCase();
-        final expUser = e.userName.toLowerCase();
-        return expUser == uName ||
-            expUser == fName ||
-            expUser == 'current employee' ||
+        if (user == null) return false;
+        final uName = user.username.trim().toLowerCase();
+        final fName = user.fullName.trim().toLowerCase();
+        final expUser = e.userName.trim().toLowerCase();
+        return (uName.isNotEmpty && expUser == uName) ||
+            (fName.isNotEmpty && expUser == fName) ||
             (uName.isNotEmpty && expUser.contains(uName)) ||
             (fName.isNotEmpty && expUser.contains(fName));
       }).toList();
 
-      final activeExpenses = userExpenses.isNotEmpty ? userExpenses : expenses;
+      final activeExpenses = userExpenses;
 
       final approvedSum = activeExpenses.where((e) => e.isApproved).fold(0.0, (sum, exp) => sum + exp.amount);
       final pendingSum = activeExpenses.where((e) => e.isPending).fold(0.0, (sum, exp) => sum + exp.amount);
