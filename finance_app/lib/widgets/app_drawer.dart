@@ -10,6 +10,7 @@ import '../screens/04_users_screen.dart';
 import '../screens/05_allocate_budget_screen.dart';
 import '../screens/08_my_expenses_screen.dart';
 import '../screens/11_approvals_screen.dart';
+import '../screens/12_budget_request_screen.dart';
 import '../screens/13_reports_screen.dart';
 import '../screens/14_activity_log_screen.dart';
 import '../screens/15_profile_screen.dart';
@@ -147,12 +148,6 @@ class _AppDrawerState extends State<AppDrawer> {
                   title: 'Approval Requests',
                   isSelected: widget.currentRoute == 'approvals',
                   onTap: () => _navigate(context, const ApprovalsScreen()),
-                ),
-                _DrawerTile(
-                  icon: Icons.receipt_long_rounded,
-                  title: 'My Expenses Claims',
-                  isSelected: widget.currentRoute == 'expenses',
-                  onTap: () => _navigate(context, const MyExpensesScreen()),
                 ),
                 _DrawerTile(
                   icon: Icons.bar_chart_rounded,

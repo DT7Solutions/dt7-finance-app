@@ -15,6 +15,7 @@ class ApprovalsScreen extends StatefulWidget {
 
 class _ApprovalsScreenState extends State<ApprovalsScreen> {
   String _selectedTab = 'Pending';
+  String _selectedType = 'All'; // 'All', 'Expenses', or 'Budget Requests'
   bool _isLoading = true;
 
   List<Map<String, dynamic>> _pendingApprovals = [];
@@ -29,70 +30,126 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
 
   Future<void> _loadApprovals() async {
     final expenses = await ApiService.getExpenses();
+    final reqs = await ApiService.getBudgetRequests();
+
+    final pendingExp = expenses.where((e) => e.isPending).map((e) => {
+      'id': e.id,
+      'type': 'expense',
+      'title': e.title,
+      'category': e.categoryName,
+      'user': e.userName,
+      'date': e.dateTime,
+      'amount': e.amount,
+      'reason': e.description ?? '',
+    }).toList();
+
+    final approvedExp = expenses.where((e) => e.isApproved).map((e) => {
+      'id': e.id,
+      'type': 'expense',
+      'title': e.title,
+      'category': e.categoryName,
+      'user': e.userName,
+      'date': e.dateTime,
+      'amount': e.amount,
+      'reason': e.description ?? '',
+    }).toList();
+
+    final rejectedExp = expenses.where((e) => e.isRejected).map((e) => {
+      'id': e.id,
+      'type': 'expense',
+      'title': e.title,
+      'category': e.categoryName,
+      'user': e.userName,
+      'date': e.dateTime,
+      'amount': e.amount,
+      'reason': e.description ?? '',
+    }).toList();
+
+    final pendingReq = reqs.where((r) => r.status == 'PENDING').map((r) => {
+      'id': r.id,
+      'type': 'budget_request',
+      'title': 'Budget Request: ${r.categoryName}',
+      'category': r.categoryName,
+      'user': r.userName,
+      'date': r.createdAt,
+      'amount': r.requestAmount,
+      'reason': r.reason,
+    }).toList();
+
+    final approvedReq = reqs.where((r) => r.status == 'APPROVED').map((r) => {
+      'id': r.id,
+      'type': 'budget_request',
+      'title': 'Budget Request: ${r.categoryName}',
+      'category': r.categoryName,
+      'user': r.userName,
+      'date': r.createdAt,
+      'amount': r.requestAmount,
+      'reason': r.reason,
+    }).toList();
+
+    final rejectedReq = reqs.where((r) => r.status == 'REJECTED').map((r) => {
+      'id': r.id,
+      'type': 'budget_request',
+      'title': 'Budget Request: ${r.categoryName}',
+      'category': r.categoryName,
+      'user': r.userName,
+      'date': r.createdAt,
+      'amount': r.requestAmount,
+      'reason': r.reason,
+    }).toList();
+
     if (mounted) {
       setState(() {
-        _pendingApprovals = expenses
-            .where((e) => e.isPending)
-            .map((e) => {
-                  'id': e.id,
-                  'title': e.title,
-                  'category': e.categoryName,
-                  'user': e.userName,
-                  'date': e.dateTime,
-                  'amount': e.amount,
-                })
-            .toList();
-
-        _approvedApprovals = expenses
-            .where((e) => e.isApproved)
-            .map((e) => {
-                  'id': e.id,
-                  'title': e.title,
-                  'category': e.categoryName,
-                  'user': e.userName,
-                  'date': e.dateTime,
-                  'amount': e.amount,
-                })
-            .toList();
-
-        _rejectedApprovals = expenses
-            .where((e) => e.isRejected)
-            .map((e) => {
-                  'id': e.id,
-                  'title': e.title,
-                  'category': e.categoryName,
-                  'user': e.userName,
-                  'date': e.dateTime,
-                  'amount': e.amount,
-                })
-            .toList();
+        if (_selectedType == 'Expenses') {
+          _pendingApprovals = pendingExp;
+          _approvedApprovals = approvedExp;
+          _rejectedApprovals = rejectedExp;
+        } else if (_selectedType == 'Budget Requests') {
+          _pendingApprovals = pendingReq;
+          _approvedApprovals = approvedReq;
+          _rejectedApprovals = rejectedReq;
+        } else {
+          _pendingApprovals = [...pendingReq, ...pendingExp];
+          _approvedApprovals = [...approvedReq, ...approvedExp];
+          _rejectedApprovals = [...rejectedReq, ...rejectedExp];
+        }
         _isLoading = false;
       });
     }
   }
 
-  Future<void> _handleAction(int id, String action) async {
-    final expenses = await ApiService.getExpenses();
-    final expIdx = expenses.indexWhere((e) => e.id == id);
-    if (expIdx != -1) {
-      final exp = expenses[expIdx];
-      await ApiService.updateExpense(
-        id: exp.id,
-        title: exp.title,
-        amount: exp.amount,
-        categoryName: exp.categoryName,
-        status: action == 'approve' ? 'APPROVED' : 'REJECTED',
-      );
+  Future<void> _handleAction(int id, String action, String type) async {
+    final newStatus = action == 'approve' ? 'APPROVED' : 'REJECTED';
+    if (type == 'budget_request') {
+      await ApiService.updateBudgetRequestStatus(id, newStatus);
     } else {
-      await ApiService.submitApprovalAction(id, 'expense', action);
+      final expenses = await ApiService.getExpenses();
+      final expIdx = expenses.indexWhere((e) => e.id == id);
+      if (expIdx != -1) {
+        final exp = expenses[expIdx];
+        await ApiService.updateExpense(
+          id: exp.id,
+          title: exp.title,
+          amount: exp.amount,
+          categoryName: exp.categoryName,
+          status: newStatus,
+        );
+      } else {
+        await ApiService.submitApprovalAction(id, 'expense', action);
+      }
     }
     await _loadApprovals();
 
     if (mounted) {
+      final label = type == 'budget_request' ? 'Budget Request' : 'Expense';
+      final isApproved = action == 'approve';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Expense ${action == 'approve' ? 'approved' : 'rejected'} successfully!'),
-          backgroundColor: action == 'approve' ? AppColors.approvedGreen : Colors.redAccent,
+          content: Text(
+            isApproved
+                ? (type == 'budget_request' ? '$label approved & allocated successfully!' : '$label approved successfully!')
+                : '$label rejected!'),
+          backgroundColor: isApproved ? AppColors.approvedGreen : Colors.redAccent,
         ),
       );
     }
@@ -129,6 +186,101 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
           padding: const EdgeInsets.all(16.0),
           child: Column(
             children: [
+              // Type Selector (All vs Expenses vs Budget Requests)
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.all(4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() => _selectedType = 'All');
+                          _loadApprovals();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _selectedType == 'All' ? Colors.white : Colors.transparent,
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: _selectedType == 'All'
+                                ? [const BoxShadow(color: Color(0x0C000000), blurRadius: 4, offset: Offset(0, 2))]
+                                : [],
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            'All Requests',
+                            style: TextStyle(
+                              color: _selectedType == 'All' ? AppColors.primary : Colors.grey.shade700,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() => _selectedType = 'Expenses');
+                          _loadApprovals();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _selectedType == 'Expenses' ? Colors.white : Colors.transparent,
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: _selectedType == 'Expenses'
+                                ? [const BoxShadow(color: Color(0x0C000000), blurRadius: 4, offset: Offset(0, 2))]
+                                : [],
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            'Expenses',
+                            style: TextStyle(
+                              color: _selectedType == 'Expenses' ? AppColors.primary : Colors.grey.shade700,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() => _selectedType = 'Budget Requests');
+                          _loadApprovals();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _selectedType == 'Budget Requests' ? Colors.white : Colors.transparent,
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: _selectedType == 'Budget Requests'
+                                ? [const BoxShadow(color: Color(0x0C000000), blurRadius: 4, offset: Offset(0, 2))]
+                                : [],
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            'Budget Req.',
+                            style: TextStyle(
+                              color: _selectedType == 'Budget Requests' ? AppColors.primary : Colors.grey.shade700,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+
               // Tabs Header
               Row(
                 children: [
@@ -199,7 +351,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
 
               // Approvals Queue List
               Expanded(
@@ -214,7 +366,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                               height: MediaQuery.of(context).size.height * 0.4,
                               child: Center(
                                 child: Text(
-                                  'No ${_selectedTab.toLowerCase()} approvals',
+                                  'No ${_selectedTab.toLowerCase()} ${_selectedType.toLowerCase()}',
                                   style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
                                 ),
                               ),
@@ -224,111 +376,127 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                       : ListView.builder(
                           physics: const AlwaysScrollableScrollPhysics(),
                           itemCount: displayList.length,
-                        itemBuilder: (ctx, idx) {
-                          final item = displayList[idx];
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 14),
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: Colors.grey.shade100),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      item['title'] as String,
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: Colors.blue.shade50,
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Text(
-                                        item['category'] as String,
-                                        style: const TextStyle(color: Colors.blue, fontSize: 10, fontWeight: FontWeight.bold),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  item['user'] as String,
-                                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                                ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      item['date'] as String,
-                                      style: TextStyle(fontSize: 11, color: Colors.grey.shade400),
-                                    ),
-                                    Text(
-                                      '₹${(item['amount'] as double).toStringAsFixed(0)}',
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 14),
+                          itemBuilder: (ctx, idx) {
+                            final item = displayList[idx];
+                            final itemType = item['type'] as String? ?? 'expense';
+                            final reasonStr = item['reason'] as String? ?? '';
 
-                                // Action Buttons or Status Badge
-                                if (_selectedTab == 'Pending')
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 14),
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: Colors.grey.shade200),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
                                   Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
                                       Expanded(
-                                        child: OutlinedButton(
-                                          style: OutlinedButton.styleFrom(
-                                            side: BorderSide(color: Colors.grey.shade300),
-                                            alignment: Alignment.center,
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                            padding: const EdgeInsets.symmetric(vertical: 10),
-                                          ),
-                                          onPressed: () => _handleAction(item['id'] as int, 'reject'),
-                                          child: const Text(
-                                            'Reject',
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold),
-                                          ),
+                                        child: Text(
+                                          item['title'] as String,
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                                         ),
                                       ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: ElevatedButton(
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: AppColors.primary,
-                                            alignment: Alignment.center,
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                            padding: const EdgeInsets.symmetric(vertical: 10),
-                                          ),
-                                          onPressed: () => _handleAction(item['id'] as int, 'approve'),
-                                          child: const Text(
-                                            'Approve',
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: itemType == 'budget_request' ? const Color(0xFFECFDF5) : Colors.blue.shade50,
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          item['category'] as String,
+                                          style: TextStyle(
+                                            color: itemType == 'budget_request' ? const Color(0xFF10B981) : Colors.blue,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
                                           ),
                                         ),
                                       ),
                                     ],
-                                  )
-                                else
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: StatusBadge(
-                                      status: _selectedTab == 'Approved' ? 'APPROVED' : 'REJECTED',
-                                    ),
                                   ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    item['user'] as String,
+                                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                  ),
+                                  if (reasonStr.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Reason: $reasonStr',
+                                      style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontStyle: FontStyle.italic),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        item['date'] as String,
+                                        style: TextStyle(fontSize: 11, color: Colors.grey.shade400),
+                                      ),
+                                      Text(
+                                        '₹${(item['amount'] as double).toStringAsFixed(0)}',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1F2937)),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 14),
+
+                                  // Action Buttons or Status Badge
+                                  if (_selectedTab == 'Pending')
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: OutlinedButton(
+                                            style: OutlinedButton.styleFrom(
+                                              side: BorderSide(color: Colors.grey.shade300),
+                                              alignment: Alignment.center,
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                              padding: const EdgeInsets.symmetric(vertical: 10),
+                                            ),
+                                            onPressed: () => _handleAction(item['id'] as int, 'reject', itemType),
+                                            child: const Text(
+                                              'Reject',
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: ElevatedButton(
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: AppColors.primary,
+                                              alignment: Alignment.center,
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                              padding: const EdgeInsets.symmetric(vertical: 10),
+                                            ),
+                                            onPressed: () => _handleAction(item['id'] as int, 'approve', itemType),
+                                            child: Text(
+                                              itemType == 'budget_request' ? 'Approve & Allocate' : 'Approve',
+                                              textAlign: TextAlign.center,
+                                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  else
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: StatusBadge(
+                                        status: _selectedTab == 'Approved' ? 'APPROVED' : 'REJECTED',
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
                 ),
               ),
             ],

@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import '../models/expense_model.dart';
+import '../models/budget_request_model.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/custom_button.dart';
+import '../widgets/status_badge.dart';
 import '02_login_screen.dart';
 import '07_add_expense_screen.dart';
 import '08_my_expenses_screen.dart';
 import '09_expense_detail_screen.dart';
 import '10_expense_history_screen.dart';
+import '12_budget_request_screen.dart';
 import '15_profile_screen.dart';
 
 class EmployeeDashboardScreen extends StatefulWidget {
@@ -22,6 +25,7 @@ class EmployeeDashboardScreen extends StatefulWidget {
 class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
   int _currentIndex = 0;
   List<ExpenseModel> _recentExpenses = [];
+  List<BudgetRequestModel> _myBudgetRequests = [];
   UserModel? _currentUser;
   String? _profilePhotoUrl;
   bool _isLoading = true;
@@ -53,12 +57,16 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
       final totalUsed = approvedSum;
       final remaining = allocated - totalUsed;
 
+      final allReqs = await ApiService.getBudgetRequests();
+      final myReqs = allReqs.where((r) => ApiService.isBudgetRequestOwnedByUser(r, user)).toList();
+
       if (mounted) {
         setState(() {
           _approvedTotal = approvedSum;
           _pendingTotal = pendingSum;
           _rejectedTotal = rejectedSum;
           _profilePhotoUrl = photo;
+          _myBudgetRequests = myReqs;
           _currentUser = user != null
               ? UserModel(
                   id: user.id,
@@ -228,31 +236,56 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: const Color(0xFFFCA5A5)),
                 ),
-                child: Row(
+                child: Column(
                   children: [
-                    const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 24),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Budget Overspent Alert!',
-                            style: TextStyle(
-                              color: Color(0xFF991B1B),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                            ),
+                    Row(
+                      children: [
+                        const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 24),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Budget Overspent Alert!',
+                                style: TextStyle(
+                                  color: Color(0xFF991B1B),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'You have overspent by ₹${overspendAmount.toStringAsFixed(0)}. Click below to request additional budget allocation from admin.',
+                                style: const TextStyle(
+                                  color: Color(0xFFDC2626),
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'You have overspent by ₹${overspendAmount.toStringAsFixed(0)}. Please contact founder/admin for budget reallocation.',
-                            style: const TextStyle(
-                              color: Color(0xFFDC2626),
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 36,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.redAccent,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: EdgeInsets.zero,
+                        ),
+                        icon: const Icon(Icons.add_circle_outline, size: 16, color: Colors.white),
+                        label: const Text('Request Additional Budget', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                        onPressed: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const BudgetRequestScreen()),
+                          );
+                          _loadData();
+                        },
                       ),
                     ),
                   ],
@@ -437,7 +470,23 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
                     },
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _buildQuickActionCard(
+                    context,
+                    icon: Icons.account_balance_wallet_outlined,
+                    label: 'Request Budget',
+                    color: const Color(0xFF10B981),
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const BudgetRequestScreen()),
+                      );
+                      _loadData();
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
                 Expanded(
                   child: _buildQuickActionCard(
                     context,
@@ -449,7 +498,7 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
                     },
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
                   child: _buildQuickActionCard(
                     context,
@@ -547,6 +596,108 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
                               ),
                             ],
                           ),
+                        ),
+                      );
+                    },
+                  ),
+            const SizedBox(height: 24),
+
+            // My Budget Requests Status Section
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('My Budget Requests Status', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                TextButton(
+                  onPressed: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const BudgetRequestScreen()),
+                    );
+                    _loadData();
+                  },
+                  child: const Text('Request Budget', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            _myBudgetRequests.isEmpty
+                ? Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: Center(
+                      child: Text('No budget requests submitted yet.', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                    ),
+                  )
+                : ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _myBudgetRequests.length > 3 ? 3 : _myBudgetRequests.length,
+                    itemBuilder: (context, index) {
+                      final req = _myBudgetRequests[index];
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    const CircleAvatar(
+                                      radius: 16,
+                                      backgroundColor: Color(0xFFECFDF5),
+                                      child: Icon(Icons.account_balance_wallet, color: Color(0xFF10B981), size: 16),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Request: ${req.categoryName}',
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1F2937)),
+                                        ),
+                                        Text(
+                                          req.createdAt,
+                                          style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                                StatusBadge(status: req.status),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    req.reason.isNotEmpty ? 'Reason: ${req.reason}' : '',
+                                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '₹${req.requestAmount.toStringAsFixed(0)}',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1F2937)),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       );
                     },

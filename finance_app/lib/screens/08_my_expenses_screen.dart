@@ -654,11 +654,10 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
             for (var u in users) {
               final uExpenses = allExpenses.where((e) => ApiService.isExpenseOwnedByUser(e, u)).toList();
               userExpenseMap[u.id] = uExpenses;
-              final sum = uExpenses.fold(0.0, (s, e) => s + e.amount);
-              userSpentMap[u.id] = sum > 0 ? sum : u.usedAmount;
+              userSpentMap[u.id] = ApiService.calculateUserSpent(u, allExpenses);
             }
 
-            final totalExpensesSum = userSpentMap.values.fold(0.0, (s, a) => s + a);
+            final totalExpensesSum = allExpenses.fold(0.0, (s, e) => s + e.amount);
             final spenders = users.where((u) => (userSpentMap[u.id] ?? 0) > 0).toList();
             spenders.sort((a, b) => (userSpentMap[b.id] ?? 0).compareTo(userSpentMap[a.id] ?? 0));
 
@@ -843,14 +842,10 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
                         for (var u in users) {
                           final uExpenses = allExpenses.where((e) => ApiService.isExpenseOwnedByUser(e, u)).toList();
                           userExpenseMap[u.id] = uExpenses;
-                          final sum = uExpenses.fold(0.0, (s, e) => s + e.amount);
-                          userSpentMap[u.id] = sum > 0 ? sum : u.usedAmount;
+                          userSpentMap[u.id] = ApiService.calculateUserSpent(u, allExpenses);
                         }
 
-                        final dashTotal = (dashMap['total_expenses'] as num?)?.toDouble() ?? 0.0;
-                        final sumExpensesList = allExpenses.fold(0.0, (s, e) => s + e.amount);
-                        final sumUserSpentMap = userSpentMap.values.fold(0.0, (s, a) => s + a);
-                        final totalExpenseAmount = [sumExpensesList, sumUserSpentMap, dashTotal].reduce((a, b) => a > b ? a : b);
+                        final totalExpenseAmount = allExpenses.fold(0.0, (s, e) => s + e.amount);
 
                         List<UserModel> filteredUsers = List.from(users);
                         if (filterUserMode == 'Spenders') {
