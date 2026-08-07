@@ -42,16 +42,7 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
       final photo = await AuthService.getProfilePhoto();
 
       final allocated = user?.allocatedAmount ?? 0.0;
-      final userExpenses = expenses.where((e) {
-        if (user == null) return false;
-        final uName = user.username.trim().toLowerCase();
-        final fName = user.fullName.trim().toLowerCase();
-        final expUser = e.userName.trim().toLowerCase();
-        return (uName.isNotEmpty && expUser == uName) ||
-            (fName.isNotEmpty && expUser == fName) ||
-            (uName.isNotEmpty && expUser.contains(uName)) ||
-            (fName.isNotEmpty && expUser.contains(fName));
-      }).toList();
+      final userExpenses = expenses.where((e) => ApiService.isExpenseOwnedByUser(e, user)).toList();
 
       final activeExpenses = userExpenses;
 

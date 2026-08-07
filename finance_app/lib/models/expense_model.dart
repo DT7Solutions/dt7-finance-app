@@ -32,21 +32,53 @@ class ExpenseModel {
   });
 
   factory ExpenseModel.fromJson(Map<String, dynamic> json) {
+    String extractUserName(Map<String, dynamic> json) {
+      if (json['user_name'] != null && json['user_name'].toString().trim().isNotEmpty) {
+        return json['user_name'].toString();
+      }
+      if (json['employee_name'] != null && json['employee_name'].toString().trim().isNotEmpty) {
+        return json['employee_name'].toString();
+      }
+      if (json['created_by'] != null && json['created_by'].toString().trim().isNotEmpty) {
+        return json['created_by'].toString();
+      }
+      if (json['submitted_by'] != null && json['submitted_by'].toString().trim().isNotEmpty) {
+        return json['submitted_by'].toString();
+      }
+      if (json['user'] != null) {
+        final u = json['user'];
+        if (u is Map) {
+          return (u['username'] ?? u['full_name'] ?? u['first_name'] ?? u['email'] ?? '').toString();
+        } else if (u is String && u.trim().isNotEmpty) {
+          return u;
+        }
+      }
+      if (json['employee'] != null) {
+        final emp = json['employee'];
+        if (emp is Map) {
+          return (emp['username'] ?? emp['full_name'] ?? emp['first_name'] ?? emp['email'] ?? '').toString();
+        } else if (emp is String && emp.trim().isNotEmpty) {
+          return emp;
+        }
+      }
+      return '';
+    }
+
     return ExpenseModel(
       id: json['id'] ?? 0,
       title: json['title'] ?? '',
       amount: double.tryParse(json['amount'].toString()) ?? 0.0,
-      categoryId: json['category'],
+      categoryId: json['category'] is int ? json['category'] : null,
       categoryName: json['category_name'] ?? (json['category_details'] is Map ? json['category_details']['name'] : 'General'),
       categoryColor: json['category_color'] ?? '#FF5500',
-      userName: json['user_name'] ?? (json['employee_name'] ?? ''),
+      userName: extractUserName(json),
       description: json['description'] ?? json['note'] ?? '',
-      dateTime: json['date_time'] ?? json['created_at'] ?? json['date'] ?? '',
+      dateTime: (json['date_time'] ?? json['created_at'] ?? json['date'] ?? '').toString(),
       status: (json['status'] ?? 'PENDING').toString().toUpperCase(),
       paymentMode: json['payment_mode'] ?? 'Cash',
       receiptImage: json['receipt_image'] ?? json['receipt'] ?? json['bill_image'],
-      approvedBy: json['approved_by'] ?? json['reviewed_by'] ?? '',
-      approvalDate: json['approval_date'] ?? json['reviewed_at'] ?? '',
+      approvedBy: (json['approved_by'] ?? json['reviewed_by'] ?? '').toString(),
+      approvalDate: (json['approval_date'] ?? json['reviewed_at'] ?? '').toString(),
     );
   }
 

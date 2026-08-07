@@ -48,6 +48,51 @@ class ApiService {
         _storedUsers.addAll(loaded);
       }
     } catch (_) {}
+
+    if (_storedUsers.isEmpty) {
+      _storedUsers.addAll([
+        UserModel(
+          id: 1,
+          username: 'paul_pk',
+          email: 'paul@dt7.agency',
+          firstName: 'Paul',
+          lastName: 'PK',
+          role: 'EMPLOYEE',
+          department: 'Engineering',
+          employeeId: 'DT7EMP001',
+          allocatedAmount: 25000.0,
+          usedAmount: 8000.0,
+          remainingAmount: 17000.0,
+        ),
+        UserModel(
+          id: 2,
+          username: 'neha_singh',
+          email: 'neha@dt7.agency',
+          firstName: 'Neha',
+          lastName: 'Singh',
+          role: 'EMPLOYEE',
+          department: 'Design & UI',
+          employeeId: 'DT7EMP002',
+          allocatedAmount: 15000.0,
+          usedAmount: 5000.0,
+          remainingAmount: 10000.0,
+        ),
+        UserModel(
+          id: 3,
+          username: 'alex_j',
+          email: 'alex@dt7.agency',
+          firstName: 'Alex',
+          lastName: 'Johnson',
+          role: 'EMPLOYEE',
+          department: 'Marketing',
+          employeeId: 'DT7EMP003',
+          allocatedAmount: 10000.0,
+          usedAmount: 12000.0,
+          remainingAmount: -2000.0,
+        ),
+      ]);
+      await _saveUsersToPrefs();
+    }
   }
 
   static List<UserModel> get storedUsers => List.unmodifiable(_storedUsers);
@@ -64,10 +109,8 @@ class ApiService {
           final results = data['results'] ?? data;
           if (results is List && results.isNotEmpty) {
             final parsedUsers = (results).map((i) => UserModel.fromJson(i)).toList();
-            final parsedIds = parsedUsers.map((u) => u.id).toSet();
-            final localOnly = _storedUsers.where((u) => !parsedIds.contains(u.id)).toList();
             _storedUsers.clear();
-            _storedUsers.addAll([...localOnly, ...parsedUsers]);
+            _storedUsers.addAll(parsedUsers);
             await _saveUsersToPrefs();
             break;
           }
@@ -102,29 +145,34 @@ class ApiService {
     return updatedUsers;
   }
 
-  static double calculateUserSpent(UserModel u, List<ExpenseModel> expenses) {
-    final uname = u.username.trim().toLowerCase();
-    final fname = u.fullName.trim().toLowerCase();
-    final email = u.email.trim().toLowerCase();
-    final first = u.firstName.trim().toLowerCase();
+  static bool isExpenseOwnedByUser(ExpenseModel exp, UserModel? user) {
+    if (user == null) return false;
+    final uname = user.username.trim().toLowerCase();
+    final fname = user.fullName.trim().toLowerCase();
+    final email = user.email.trim().toLowerCase();
+    final first = user.firstName.trim().toLowerCase();
+    final emailPrefix = email.contains('@') ? email.split('@').first : email;
+    final expUser = exp.userName.trim().toLowerCase();
 
+    if (expUser.isEmpty) {
+      return true;
+    }
+
+    if (expUser == uname || expUser == fname || expUser == email || expUser == first || expUser == emailPrefix) {
+      return true;
+    }
+    if (uname.isNotEmpty && (expUser.contains(uname) || uname.contains(expUser))) return true;
+    if (fname.isNotEmpty && (expUser.contains(fname) || fname.contains(expUser))) return true;
+    if (first.isNotEmpty && (expUser.contains(first) || first.contains(expUser))) return true;
+    if (emailPrefix.isNotEmpty && (expUser.contains(emailPrefix) || emailPrefix.contains(expUser))) return true;
+
+    return false;
+  }
+
+  static double calculateUserSpent(UserModel u, List<ExpenseModel> expenses) {
     double total = 0.0;
     for (var exp in expenses) {
-      final expUser = exp.userName.trim().toLowerCase();
-      if (expUser.isEmpty) continue;
-
-      bool matches = false;
-      if (expUser == uname || expUser == fname || expUser == email) {
-        matches = true;
-      } else if (uname.isNotEmpty && (expUser.contains(uname) || uname.contains(expUser))) {
-        matches = true;
-      } else if (fname.isNotEmpty && (expUser.contains(fname) || fname.contains(expUser))) {
-        matches = true;
-      } else if (first.isNotEmpty && (expUser.contains(first) || first.contains(expUser))) {
-        matches = true;
-      }
-
-      if (matches) {
+      if (isExpenseOwnedByUser(exp, u)) {
         total += exp.amount;
       }
     }
@@ -439,10 +487,53 @@ class ApiService {
       if (savedStr != null && savedStr.isNotEmpty) {
         final List dynamicList = jsonDecode(savedStr);
         final loaded = dynamicList.map((i) => ExpenseModel.fromJson(Map<String, dynamic>.from(i))).toList();
+        final nonSeed = loaded.where((e) => e.id != 101 && e.id != 102 && e.id != 103).toList();
         _storedExpenses.clear();
-        _storedExpenses.addAll(loaded);
+        if (nonSeed.isNotEmpty) {
+          _storedExpenses.addAll(nonSeed);
+        } else {
+          _storedExpenses.addAll(loaded);
+        }
       }
     } catch (_) {}
+    if (_storedExpenses.isEmpty) {
+      _storedExpenses.addAll([
+        ExpenseModel(
+          id: 101,
+          title: 'AWS Cloud Hosting & Server Infrastructure',
+          amount: 8000.0,
+          categoryId: 4,
+          categoryName: 'Cloud Infrastructure & Hosting',
+          userName: 'Paul PK',
+          dateTime: '07 Aug 2026, 09:30 AM',
+          status: 'APPROVED',
+          description: 'Monthly production cloud server cluster hosting',
+        ),
+        ExpenseModel(
+          id: 102,
+          title: 'Figma Professional Team Plan',
+          amount: 5000.0,
+          categoryId: 1,
+          categoryName: 'Software Tools',
+          userName: 'Neha Singh',
+          dateTime: '05 Aug 2026, 11:00 AM',
+          status: 'APPROVED',
+          description: 'UI/UX team design software licenses',
+        ),
+        ExpenseModel(
+          id: 103,
+          title: 'Meta Ads & Growth Marketing Tools',
+          amount: 12000.0,
+          categoryId: 5,
+          categoryName: 'API & Third-Party Services',
+          userName: 'Alex Johnson',
+          dateTime: '03 Aug 2026, 01:45 PM',
+          status: 'APPROVED',
+          description: 'Client campaign ad spend and marketing tools',
+        ),
+      ]);
+      await _saveExpensesToPrefs();
+    }
   }
 
   // --- EXPENSES ---
@@ -458,10 +549,8 @@ class ApiService {
           final results = data['results'] ?? data;
           if (results is List && results.isNotEmpty) {
             final fetched = (results).map((i) => ExpenseModel.fromJson(i)).toList();
-            final fetchedIds = fetched.map((e) => e.id).toSet();
-            final localOnly = _storedExpenses.where((e) => !fetchedIds.contains(e.id)).toList();
             _storedExpenses.clear();
-            _storedExpenses.addAll([...localOnly, ...fetched]);
+            _storedExpenses.addAll(fetched);
             await _saveExpensesToPrefs();
             return List.from(_storedExpenses);
           }
@@ -869,7 +958,8 @@ class ApiService {
       }
     }
 
-    final totalSpentFinal = totalExpensesSum > 0 ? totalExpensesSum : users.fold(0.0, (s, u) => s + u.usedAmount);
+    final usersUsedSum = users.fold(0.0, (s, u) => s + u.usedAmount);
+    final totalSpentFinal = totalExpensesSum > usersUsedSum ? totalExpensesSum : usersUsedSum;
     final remaining = totalAllocated - totalSpentFinal;
 
     return {

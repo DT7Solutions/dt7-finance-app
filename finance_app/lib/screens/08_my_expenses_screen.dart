@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../models/user_model.dart';
 import '../models/expense_model.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
@@ -29,6 +30,8 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
   String _categoryFilter = 'All';
   String _statusFilter = 'All';
 
+  bool _isFounder = false;
+
   @override
   void initState() {
     super.initState();
@@ -37,22 +40,15 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
 
   Future<void> _loadExpenses() async {
     final currentUser = await ApiService.getCurrentUser();
+    final role = await AuthService.getUserRole();
+    final isFounder = (role == 'FOUNDER' || (currentUser != null && currentUser.role == 'FOUNDER'));
     final list = await ApiService.getExpenses();
 
-    final userExpenses = list.where((e) {
-      if (currentUser == null) return false;
-      final uName = currentUser.username.trim().toLowerCase();
-      final fName = currentUser.fullName.trim().toLowerCase();
-      final expUser = e.userName.trim().toLowerCase();
-
-      return (uName.isNotEmpty && expUser == uName) ||
-          (fName.isNotEmpty && expUser == fName) ||
-          (uName.isNotEmpty && expUser.contains(uName)) ||
-          (fName.isNotEmpty && expUser.contains(fName));
-    }).toList();
+    final userExpenses = isFounder ? list : list.where((e) => ApiService.isExpenseOwnedByUser(e, currentUser)).toList();
 
     if (mounted) {
       setState(() {
+        _isFounder = isFounder;
         _expenses = userExpenses;
         _isLoading = false;
       });
@@ -468,6 +464,8 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
               ),
               const SizedBox(height: 16),
 
+              if (_isFounder) _buildExpenseBreakdownByUserSection(),
+
               // Expense Items List
               Expanded(
                 child: _isLoading
@@ -593,6 +591,520 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildExpenseBreakdownByUserSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Expense Breakdown by User',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1F2937),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Who spent the total expenses amount',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+            TextButton(
+              onPressed: () => _showExpenseBreakdownModal(context),
+              child: const Text(
+                'View All',
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        FutureBuilder<List<dynamic>>(
+          future: Future.wait([
+            ApiService.getUsers(),
+            ApiService.getExpenses(),
+          ]),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const SizedBox(
+                height: 50,
+                child: Center(child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2)),
+              );
+            }
+            final users = (snapshot.data?[0] as List<UserModel>?) ?? [];
+            final allExpenses = (snapshot.data?[1] as List<ExpenseModel>?) ?? [];
+
+            Map<int, List<ExpenseModel>> userExpenseMap = {};
+            Map<int, double> userSpentMap = {};
+
+            for (var u in users) {
+              final uExpenses = allExpenses.where((e) => ApiService.isExpenseOwnedByUser(e, u)).toList();
+              userExpenseMap[u.id] = uExpenses;
+              final sum = uExpenses.fold(0.0, (s, e) => s + e.amount);
+              userSpentMap[u.id] = sum > 0 ? sum : u.usedAmount;
+            }
+
+            final totalExpensesSum = userSpentMap.values.fold(0.0, (s, a) => s + a);
+            final spenders = users.where((u) => (userSpentMap[u.id] ?? 0) > 0).toList();
+            spenders.sort((a, b) => (userSpentMap[b.id] ?? 0).compareTo(userSpentMap[a.id] ?? 0));
+
+            final displayUsers = spenders.isNotEmpty ? spenders.take(3).toList() : users.take(3).toList();
+
+            if (displayUsers.isEmpty) {
+              return const SizedBox.shrink();
+            }
+
+            return Column(
+              children: displayUsers.map((u) {
+                final spent = userSpentMap[u.id] ?? 0.0;
+                final uExpenses = userExpenseMap[u.id] ?? [];
+                final pct = totalExpensesSum > 0 ? ((spent / totalExpensesSum) * 100).toStringAsFixed(0) : '0';
+                final isOver = (spent > u.allocatedAmount || u.remainingAmount < 0) && u.allocatedAmount > 0;
+
+                return InkWell(
+                  onTap: () => _showExpenseBreakdownModal(context),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isOver ? const Color(0xFFFFF1F2).withOpacity(0.6) : Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isOver ? const Color(0xFFFCA5A5) : Colors.grey.shade200,
+                        width: isOver ? 1.5 : 1.0,
+                      ),
+                      boxShadow: const [
+                        BoxShadow(color: Color(0x06000000), blurRadius: 4, offset: Offset(0, 2)),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 18,
+                              backgroundColor: isOver ? const Color(0xFFFEF2F2) : AppColors.primaryLight,
+                              child: Text(
+                                u.fullName.isNotEmpty ? u.fullName[0].toUpperCase() : 'U',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: isOver ? const Color(0xFFEF4444) : AppColors.primary,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  u.fullName,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1F2937)),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${u.department} • ${uExpenses.length} Claims',
+                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '₹${spent.toStringAsFixed(0)}',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFFFF5500)),
+                            ),
+                            const SizedBox(height: 2),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: isOver ? const Color(0xFFFEF2F2) : AppColors.primaryLight,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                isOver ? '🚨 OVER BUDGET' : '$pct% of expenses',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  color: isOver ? const Color(0xFFEF4444) : AppColors.primary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            );
+          },
+        ),
+        const SizedBox(height: 10),
+      ],
+    );
+  }
+
+  void _showExpenseBreakdownModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        String filterUserMode = 'All';
+
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.85,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(top: 12, bottom: 8),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Expense Breakdown by User',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1F2937),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Who spent the total expenses amount & their claims',
+                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: FutureBuilder<List<dynamic>>(
+                      future: Future.wait([
+                        ApiService.getUsers(),
+                        ApiService.getExpenses(),
+                        ApiService.getFounderDashboard(),
+                      ]),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+                        }
+                        final users = (snapshot.data?[0] as List<UserModel>?) ?? [];
+                        final allExpenses = (snapshot.data?[1] as List<ExpenseModel>?) ?? [];
+                        final dashMap = (snapshot.data?[2] as Map<String, dynamic>?) ?? {};
+
+                        Map<int, List<ExpenseModel>> userExpenseMap = {};
+                        Map<int, double> userSpentMap = {};
+
+                        for (var u in users) {
+                          final uExpenses = allExpenses.where((e) => ApiService.isExpenseOwnedByUser(e, u)).toList();
+                          userExpenseMap[u.id] = uExpenses;
+                          final sum = uExpenses.fold(0.0, (s, e) => s + e.amount);
+                          userSpentMap[u.id] = sum > 0 ? sum : u.usedAmount;
+                        }
+
+                        final dashTotal = (dashMap['total_expenses'] as num?)?.toDouble() ?? 0.0;
+                        final sumExpensesList = allExpenses.fold(0.0, (s, e) => s + e.amount);
+                        final sumUserSpentMap = userSpentMap.values.fold(0.0, (s, a) => s + a);
+                        final totalExpenseAmount = [sumExpensesList, sumUserSpentMap, dashTotal].reduce((a, b) => a > b ? a : b);
+
+                        List<UserModel> filteredUsers = List.from(users);
+                        if (filterUserMode == 'Spenders') {
+                          filteredUsers = filteredUsers.where((u) => (userSpentMap[u.id] ?? 0) > 0).toList();
+                        } else if (filterUserMode == 'Over Budget') {
+                          filteredUsers = filteredUsers.where((u) {
+                            final spent = userSpentMap[u.id] ?? 0;
+                            return (spent > u.allocatedAmount || u.remainingAmount < 0) && u.allocatedAmount > 0;
+                          }).toList();
+                        }
+
+                        filteredUsers.sort((a, b) {
+                          final spentA = userSpentMap[a.id] ?? 0;
+                          final spentB = userSpentMap[b.id] ?? 0;
+                          return spentB.compareTo(spentA);
+                        });
+
+                        return Column(
+                          children: [
+                            Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [AppColors.primary, AppColors.primary.withOpacity(0.85)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Color(0x20FF5500),
+                                    blurRadius: 10,
+                                    offset: Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'TOTAL EXPENSES AMOUNT',
+                                        style: TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        '₹${totalExpenseAmount.toStringAsFixed(0)}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      '${users.length} Employees',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                              child: Row(
+                                children: ['All', 'Spenders', 'Over Budget'].map((mode) {
+                                  final isSel = filterUserMode == mode;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(right: 8),
+                                    child: ChoiceChip(
+                                      label: Text(mode),
+                                      selected: isSel,
+                                      selectedColor: AppColors.primaryLight,
+                                      labelStyle: TextStyle(
+                                        color: isSel ? AppColors.primary : Colors.grey.shade700,
+                                        fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
+                                        fontSize: 12,
+                                      ),
+                                      onSelected: (selected) {
+                                        if (selected) {
+                                          setModalState(() => filterUserMode = mode);
+                                        }
+                                      },
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+
+                            Expanded(
+                              child: filteredUsers.isEmpty
+                                  ? const Center(child: Text('No matching spending records found'))
+                                  : ListView.builder(
+                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                                      itemCount: filteredUsers.length,
+                                      itemBuilder: (context, idx) {
+                                        final u = filteredUsers[idx];
+                                        final spent = userSpentMap[u.id] ?? 0.0;
+                                        final uExpenses = userExpenseMap[u.id] ?? [];
+                                        final pct = totalExpenseAmount > 0 ? ((spent / totalExpenseAmount) * 100).toStringAsFixed(0) : '0';
+                                        final isOver = (spent > u.allocatedAmount || u.remainingAmount < 0) && u.allocatedAmount > 0;
+
+                                        return Card(
+                                          margin: const EdgeInsets.only(bottom: 12),
+                                          elevation: 0,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(16),
+                                            side: BorderSide(
+                                              color: isOver ? const Color(0xFFFCA5A5) : Colors.grey.shade200,
+                                              width: isOver ? 1.5 : 1.0,
+                                            ),
+                                          ),
+                                          color: isOver ? const Color(0xFFFFF1F2).withOpacity(0.5) : Colors.grey.shade50,
+                                          child: ExpansionTile(
+                                            shape: const Border(),
+                                            leading: CircleAvatar(
+                                              backgroundColor: isOver ? const Color(0xFFFEF2F2) : AppColors.primaryLight,
+                                              child: Text(
+                                                u.fullName.isNotEmpty ? u.fullName[0].toUpperCase() : 'U',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  color: isOver ? const Color(0xFFEF4444) : AppColors.primary,
+                                                ),
+                                              ),
+                                            ),
+                                            title: Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    u.fullName,
+                                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                                  ),
+                                                ),
+                                                Text(
+                                                  '₹${spent.toStringAsFixed(0)}',
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w800,
+                                                    fontSize: 15,
+                                                    color: Color(0xFFFF5500),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            subtitle: Row(
+                                              children: [
+                                                Text(
+                                                  '${u.department} • ${uExpenses.length} Claims',
+                                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                                ),
+                                                const Spacer(),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: isOver ? const Color(0xFFFEF2F2) : AppColors.primaryLight,
+                                                    borderRadius: BorderRadius.circular(6),
+                                                  ),
+                                                  child: Text(
+                                                    isOver ? '🚨 OVER BUDGET' : '$pct% of expenses',
+                                                    style: TextStyle(
+                                                      fontSize: 9,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: isOver ? const Color(0xFFEF4444) : AppColors.primary,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            children: [
+                                              if (uExpenses.isEmpty)
+                                                Padding(
+                                                  padding: const EdgeInsets.all(12.0),
+                                                  child: Text(
+                                                    'Allocated budget spent without individual claims submitted.',
+                                                    style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.grey.shade600),
+                                                  ),
+                                                )
+                                              else
+                                                ListView.builder(
+                                                  shrinkWrap: true,
+                                                  physics: const NeverScrollableScrollPhysics(),
+                                                  itemCount: uExpenses.length,
+                                                  itemBuilder: (ctx, eIdx) {
+                                                    final exp = uExpenses[eIdx];
+                                                    return Container(
+                                                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                                                      padding: const EdgeInsets.all(10),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.white,
+                                                        borderRadius: BorderRadius.circular(10),
+                                                        border: Border.all(color: Colors.grey.shade200),
+                                                      ),
+                                                      child: Row(
+                                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                        children: [
+                                                          Expanded(
+                                                            child: Column(
+                                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                                              children: [
+                                                                Text(exp.title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                                                                Text('${exp.categoryName} • ${exp.dateTime}', style: TextStyle(fontSize: 10, color: Colors.grey.shade500)),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          Column(
+                                                            crossAxisAlignment: CrossAxisAlignment.end,
+                                                            children: [
+                                                              Text('₹${exp.amount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                                              StatusBadge(status: exp.status),
+                                                            ],
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    );
+                                                  },
+                                                ),
+                                              const SizedBox(height: 8),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

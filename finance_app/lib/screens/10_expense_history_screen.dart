@@ -55,17 +55,7 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
       final currentUser = await ApiService.getCurrentUser();
       final list = await ApiService.getExpenses();
 
-      final userExpenses = list.where((e) {
-        if (currentUser == null) return false;
-        final uName = currentUser.username.trim().toLowerCase();
-        final fName = currentUser.fullName.trim().toLowerCase();
-        final expUser = e.userName.trim().toLowerCase();
-
-        return (uName.isNotEmpty && expUser == uName) ||
-            (fName.isNotEmpty && expUser == fName) ||
-            (uName.isNotEmpty && expUser.contains(uName)) ||
-            (fName.isNotEmpty && expUser.contains(fName));
-      }).toList();
+      final userExpenses = list.where((e) => ApiService.isExpenseOwnedByUser(e, currentUser)).toList();
 
       if (mounted) {
         setState(() {
@@ -195,17 +185,20 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
 
     // Period Filter logic
     if (_selectedPeriod == 'This Month') {
-      final curMonth = DateFormat('MMM').format(now).toLowerCase();
+      final curMonthName = DateFormat('MMM').format(now).toLowerCase();
+      final curMonthNum = '-${now.month.toString().padLeft(2, '0')}-';
       final curYear = now.year.toString();
       rawList = rawList.where((e) {
         final dLower = e.dateTime.toLowerCase();
-        return dLower.contains(curMonth) || dLower.contains(curYear);
+        return dLower.contains(curMonthName) || dLower.contains(curMonthNum) || dLower.contains(curYear);
       }).toList();
     } else if (_selectedPeriod == 'Last Month') {
       final prevDate = DateTime(now.year, now.month - 1, 1);
-      final prevMonth = DateFormat('MMM').format(prevDate).toLowerCase();
+      final prevMonthName = DateFormat('MMM').format(prevDate).toLowerCase();
+      final prevMonthNum = '-${prevDate.month.toString().padLeft(2, '0')}-';
       rawList = rawList.where((e) {
-        return e.dateTime.toLowerCase().contains(prevMonth);
+        final dLower = e.dateTime.toLowerCase();
+        return dLower.contains(prevMonthName) || dLower.contains(prevMonthNum);
       }).toList();
     } else if (_selectedPeriod == 'This Year') {
       final curYear = now.year.toString();

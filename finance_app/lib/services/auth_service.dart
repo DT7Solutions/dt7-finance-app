@@ -5,11 +5,11 @@ import '../models/user_model.dart';
 import 'api_service.dart';
 
 class AuthService {
-  static String baseUrl = 'http://192.168.0.2:8000/api/v1';
+  static String baseUrl = 'http://192.168.0.12:8000/api/v1';
   static String? _activeBaseUrl;
 
   static final List<String> candidateBaseUrls = [
-    'http://127.0.0.1:8000/api/v1',
+    'http://127.0.0.12:8000/api/v1',
     'http://localhost:8000/api/v1',
     'http://10.0.2.2:8000/api/v1',
     'http://192.168.0.2:8000/api/v1',
