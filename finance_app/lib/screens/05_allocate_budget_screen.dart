@@ -19,7 +19,7 @@ class AllocateBudgetScreen extends StatefulWidget {
 class _AllocateBudgetScreenState extends State<AllocateBudgetScreen> {
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
-  int? _selectedEmployeeId = 1;
+  int? _selectedEmployeeId;
   List<UserModel> _users = [];
   bool _isAllocating = false;
 
@@ -33,8 +33,14 @@ class _AllocateBudgetScreenState extends State<AllocateBudgetScreen> {
     final users = await ApiService.getUsers();
     if (mounted) {
       setState(() {
-        _users = users.where((u) => !u.isAdmin).toList();
-        if (_users.isNotEmpty) _selectedEmployeeId = _users.first.id;
+        _users = users;
+        if (_users.isNotEmpty) {
+          if (_selectedEmployeeId == null || !_users.any((u) => u.id == _selectedEmployeeId)) {
+            _selectedEmployeeId = _users.first.id;
+          }
+        } else {
+          _selectedEmployeeId = null;
+        }
       });
     }
   }
@@ -49,24 +55,29 @@ class _AllocateBudgetScreenState extends State<AllocateBudgetScreen> {
     if (_selectedEmployeeId == null || _amountController.text.isEmpty) return;
 
     setState(() => _isAllocating = true);
-    final amt = double.tryParse(_amountController.text) ?? 10000.0;
+    final amt = double.tryParse(_amountController.text) ?? 0.0;
+    final targetEmpId = _selectedEmployeeId!;
     final success = await ApiService.allocateBudget(
-      employeeId: _selectedEmployeeId!,
+      employeeId: targetEmpId,
       amount: amt,
       note: _noteController.text.trim(),
+      isAddition: true,
     );
 
     await _loadUsers();
     _amountController.clear();
     _noteController.clear();
 
-    setState(() => _isAllocating = false);
-
     if (mounted) {
+      setState(() {
+        _selectedEmployeeId = targetEmpId;
+        _isAllocating = false;
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(success ? 'Budget allocated successfully!' : 'Budget allocated successfully!'),
-          backgroundColor: AppColors.approvedGreen,
+          content: Text(success ? 'Budget allocated successfully!' : 'Failed to allocate budget'),
+          backgroundColor: success ? AppColors.approvedGreen : Colors.redAccent,
         ),
       );
     }
@@ -150,12 +161,7 @@ class _AllocateBudgetScreenState extends State<AllocateBudgetScreen> {
                   ),
                   const SizedBox(height: 6),
                   () {
-                    final rawUsers = _users.isNotEmpty
-                        ? _users
-                        : [
-                            UserModel(id: 1, username: 'john_doe', email: 'john.doe@example.com', firstName: 'John', lastName: 'Doe'),
-                            UserModel(id: 2, username: 'rahul_sharma', email: 'rahul@example.com', firstName: 'Rahul', lastName: 'Sharma'),
-                          ];
+                    final rawUsers = _users;
                     final Map<int, UserModel> uniqueUserMap = {};
                     for (final u in rawUsers) {
                       uniqueUserMap.putIfAbsent(u.id, () => u);
@@ -167,6 +173,7 @@ class _AllocateBudgetScreenState extends State<AllocateBudgetScreen> {
 
                     return DropdownButtonFormField<int>(
                       value: effVal,
+                      isExpanded: true,
                       icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF1F2937)),
                       decoration: InputDecoration(
                         filled: true,
@@ -189,7 +196,7 @@ class _AllocateBudgetScreenState extends State<AllocateBudgetScreen> {
                           .map((u) => DropdownMenuItem(
                                 value: u.id,
                                 child: Text(
-                                  u.fullName,
+                                  '${u.fullName} (${u.role})',
                                   style: const TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
@@ -198,7 +205,13 @@ class _AllocateBudgetScreenState extends State<AllocateBudgetScreen> {
                                 ),
                               ))
                           .toList(),
-                      onChanged: (val) => setState(() => _selectedEmployeeId = val),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() {
+                            _selectedEmployeeId = val;
+                          });
+                        }
+                      },
                     );
                   }(),
                   const SizedBox(height: 20),
@@ -277,9 +290,9 @@ class _AllocateBudgetScreenState extends State<AllocateBudgetScreen> {
                     color: Colors.red.shade100,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Text(
-                    'OVERSPENT',
-                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.redAccent),
+                  child: Text(
+                    'Over Budget by ₹${remaining.abs().toStringAsFixed(0)}',
+                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.redAccent),
                   ),
                 ),
             ],

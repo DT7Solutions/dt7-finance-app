@@ -101,6 +101,22 @@ class ExpenseModel {
     };
   }
 
+  String get formattedDate {
+    if (dateTime.isEmpty) return '';
+    try {
+      final dt = DateTime.parse(dateTime).toLocal();
+      final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      final m = months[dt.month - 1];
+      final d = dt.day.toString().padLeft(2, '0');
+      final hour = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+      final ampm = dt.hour >= 12 ? 'PM' : 'AM';
+      final min = dt.minute.toString().padLeft(2, '0');
+      return '$d $m ${dt.year}, $hour:$min $ampm';
+    } catch (_) {
+      return dateTime;
+    }
+  }
+
   bool get isApproved => status == 'APPROVED';
   bool get isPending => status == 'PENDING';
   bool get isRejected => status == 'REJECTED';

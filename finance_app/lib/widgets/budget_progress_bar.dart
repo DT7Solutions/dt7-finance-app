@@ -40,7 +40,7 @@ class BudgetProgressBar extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
               ),
               Text(
-                '\$${spent.toStringAsFixed(0)} / \$${limit.toStringAsFixed(0)}',
+                '₹${spent.toStringAsFixed(0)} / ₹${limit.toStringAsFixed(0)}',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
@@ -62,7 +62,7 @@ class BudgetProgressBar extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             isOverBudget
-                ? 'Over limit by \$${(spent - limit).toStringAsFixed(2)}!'
+                ? 'Over budget by ₹${(spent - limit).toStringAsFixed(0)}!'
                 : '${((1 - ratio) * 100).toStringAsFixed(0)}% remaining',
             style: TextStyle(
               fontSize: 11,

@@ -135,34 +135,37 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _QuickActionButton(
-                    label: 'Add Transaction',
-                    icon: Icons.add_circle_outline,
-                    color: AppColors.primary,
-                    onTap: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const AddTransactionScreen()),
-                      );
-                      _loadData();
-                    },
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: _QuickActionButton(
+                      label: 'Add Transaction',
+                      icon: Icons.add_circle_outline,
+                      color: AppColors.primary,
+                      onTap: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const AddTransactionScreen()),
+                        );
+                        _loadData();
+                      },
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _QuickActionButton(
-                    label: 'Manage Accounts',
-                    icon: Icons.account_balance,
-                    color: AppColors.secondary,
-                    onTap: () {
-                      setState(() => _currentIndex = 1);
-                    },
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _QuickActionButton(
+                      label: 'Manage Accounts',
+                      icon: Icons.account_balance,
+                      color: AppColors.secondary,
+                      onTap: () {
+                        setState(() => _currentIndex = 1);
+                      },
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
             const SizedBox(height: 28),
 

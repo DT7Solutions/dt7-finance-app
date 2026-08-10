@@ -1,13 +1,14 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    UserViewSet, CategoryViewSet, BudgetAllocationViewSet,
+    UserViewSet, RoleViewSet, CategoryViewSet, BudgetAllocationViewSet,
     ExpenseViewSet, BudgetRequestViewSet, ApprovalActionView,
     FounderDashboardView, ReportsView, ActivityLogViewSet
 )
 
 router = DefaultRouter()
 router.register(r'users', UserViewSet, basename='user')
+router.register(r'roles', RoleViewSet, basename='role')
 router.register(r'categories', CategoryViewSet, basename='category')
 router.register(r'allocations', BudgetAllocationViewSet, basename='allocation')
 router.register(r'expenses', ExpenseViewSet, basename='expense')

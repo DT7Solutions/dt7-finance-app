@@ -5,22 +5,24 @@ import '../models/user_model.dart';
 import 'api_service.dart';
 
 class AuthService {
-  static String baseUrl = 'http://192.168.0.12:8000/api/v1';
+  static String baseUrl = 'http://192.168.0.13:8000/api/v1';
   static String? _activeBaseUrl;
 
-  static final List<String> candidateBaseUrls = [
-    'http://127.0.0.12:8000/api/v1',
+  static final List<String> _defaultCandidateBaseUrls = [
+    'http://127.0.0.1:8000/api/v1',
     'http://localhost:8000/api/v1',
     'http://10.0.2.2:8000/api/v1',
-    'http://192.168.0.2:8000/api/v1',
+    'http://192.168.0.13:8000/api/v1',
   ];
 
   static List<String> get candidateUrls {
     if (_activeBaseUrl != null && _activeBaseUrl!.isNotEmpty) {
-      return [_activeBaseUrl!, ...candidateBaseUrls.where((u) => u != _activeBaseUrl)];
+      return [_activeBaseUrl!, ..._defaultCandidateBaseUrls.where((u) => u != _activeBaseUrl)];
     }
-    return candidateBaseUrls;
+    return _defaultCandidateBaseUrls;
   }
+
+  static List<String> get candidateBaseUrls => candidateUrls;
 
   static void setActiveBaseUrl(String url) {
     _activeBaseUrl = url;

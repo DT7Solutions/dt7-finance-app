@@ -16,6 +16,8 @@ import '14_activity_log_screen.dart';
 import '15_profile_screen.dart';
 
 import '03_dashboard_screen.dart';
+import '16_roles_screen.dart';
+import '../models/role_model.dart';
 
 class UsersScreen extends StatefulWidget {
   final VoidCallback? onBackPressed;
@@ -380,6 +382,8 @@ class _UsersScreenState extends State<UsersScreen> {
     final amountCtrl = TextEditingController();
     String selectedRole = 'EMPLOYEE';
     bool obscurePassword = true;
+    List<RoleModel> availableRoles = [];
+    bool isRolesLoading = true;
 
     showModalBottomSheet(
       context: context,
@@ -387,140 +391,186 @@ class _UsersScreenState extends State<UsersScreen> {
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) => SafeArea(
-          child: Padding(
-            padding: EdgeInsets.only(
-              top: 20,
-              left: 24,
-              right: 24,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
+        builder: (context, setModalState) {
+          if (isRolesLoading) {
+            ApiService.getRoles().then((roles) {
+              if (ctx.mounted) {
+                setModalState(() {
+                  availableRoles = roles;
+                  isRolesLoading = false;
+                  if (roles.isNotEmpty && !roles.any((r) => r.code == selectedRole)) {
+                    selectedRole = roles.first.code;
+                  }
+                });
+              }
+            });
+          }
+
+          return SafeArea(
+            child: Padding(
+              padding: EdgeInsets.only(
+                top: 20,
+                left: 24,
+                right: 24,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Add New User',
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.close),
-                              onPressed: () => Navigator.pop(ctx),
-                            ),
-                          ],
+                        const Text(
+                          'Add New User',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: nameCtrl,
-                          decoration: InputDecoration(
-                            labelText: 'Full Name',
-                            hintText: 'e.g. Neha Singh',
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: nameCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'Full Name',
+                        hintText: 'e.g. Neha Singh',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: emailCtrl,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: InputDecoration(
+                        labelText: 'Email Address',
+                        hintText: 'e.g. neha@dt7.agency',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: passwordCtrl,
+                      obscureText: obscurePassword,
+                      decoration: InputDecoration(
+                        labelText: 'User Password',
+                        hintText: 'Create a custom password for user',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscurePassword ? Icons.visibility_off : Icons.visibility,
+                            color: Colors.grey,
                           ),
+                          onPressed: () {
+                            setModalState(() => obscurePassword = !obscurePassword);
+                          },
                         ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: emailCtrl,
-                          keyboardType: TextInputType.emailAddress,
-                          decoration: InputDecoration(
-                            labelText: 'Email Address',
-                            hintText: 'e.g. neha@dt7.agency',
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: passwordCtrl,
-                          obscureText: obscurePassword,
-                          decoration: InputDecoration(
-                            labelText: 'User Password',
-                            hintText: 'Create a custom password for user',
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                obscurePassword ? Icons.visibility_off : Icons.visibility,
-                                color: Colors.grey,
-                              ),
-                              onPressed: () {
-                                setModalState(() => obscurePassword = !obscurePassword);
-                              },
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: amountCtrl,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            labelText: 'Initial Allocated Amount (₹)',
-                            hintText: 'Enter amount',
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 48,
-                          child: CustomButton(
-                            text: 'Create User',
-                            onPressed: () async {
-                              final fullName = nameCtrl.text.trim();
-                              final email = emailCtrl.text.trim();
-                              final password = passwordCtrl.text.trim();
-
-                              if (fullName.isEmpty || email.isEmpty) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Please enter full name and email address'),
-                                    backgroundColor: Colors.redAccent,
-                                  ),
-                                );
-                                return;
-                              }
-
-                              if (password.isEmpty) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Please enter a password for the new user'),
-                                    backgroundColor: Colors.redAccent,
-                                  ),
-                                );
-                                return;
-                              }
-
-                              final uname = email.split('@').first.replaceAll('.', '_');
-
-                              await ApiService.addUser(
-                                username: uname,
-                                email: email,
-                                password: password,
-                                fullName: fullName,
-                                role: 'EMPLOYEE',
-                              );
-
-                        if (context.mounted) {
-                          Navigator.pop(ctx);
-                          _loadUsers();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('User "$fullName" created! Login with email: $email and password: $password'),
-                              duration: const Duration(seconds: 5),
-                              backgroundColor: AppColors.approvedGreen,
-                            ),
-                          );
-                        }
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: availableRoles.any((r) => r.code == selectedRole) ? selectedRole : (availableRoles.isNotEmpty ? availableRoles.first.code : 'EMPLOYEE'),
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        labelText: 'User Role',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      ),
+                      items: (availableRoles.isNotEmpty
+                              ? availableRoles
+                              : [
+                                  RoleModel(id: 1, name: 'Admin / Founder', code: 'ADMIN'),
+                                  RoleModel(id: 2, name: 'Staff', code: 'STAFF'),
+                                  RoleModel(id: 3, name: 'Accountant', code: 'ACCOUNTANT'),
+                                  RoleModel(id: 4, name: 'Finance Manager', code: 'MANAGER'),
+                                  RoleModel(id: 5, name: 'Finance Auditor', code: 'FINANCE'),
+                                  RoleModel(id: 6, name: 'Employee', code: 'EMPLOYEE'),
+                                ])
+                          .map((r) => DropdownMenuItem<String>(
+                                value: r.code,
+                                child: Text(r.name),
+                              ))
+                          .toList(),
+                      onChanged: (val) {
+                        if (val != null) setModalState(() => selectedRole = val);
                       },
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: amountCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: 'Initial Allocated Amount (₹)',
+                        hintText: 'Enter amount',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: CustomButton(
+                        text: 'Create User',
+                        onPressed: () async {
+                          final fullName = nameCtrl.text.trim();
+                          final email = emailCtrl.text.trim();
+                          final password = passwordCtrl.text.trim();
+                          final initAlloc = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
+
+                          if (fullName.isEmpty || email.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please enter full name and email address'),
+                                backgroundColor: Colors.redAccent,
+                              ),
+                            );
+                            return;
+                          }
+
+                          if (password.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please enter a password for the new user'),
+                                backgroundColor: Colors.redAccent,
+                              ),
+                            );
+                            return;
+                          }
+
+                          final uname = email.split('@').first.replaceAll('.', '_');
+
+                          await ApiService.addUser(
+                            username: uname,
+                            email: email,
+                            password: password,
+                            fullName: fullName,
+                            role: selectedRole,
+                            allocatedAmount: initAlloc,
+                          );
+
+                          if (context.mounted) {
+                            Navigator.pop(ctx);
+                            _loadUsers();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('User "$fullName" created with role $selectedRole! Budget allocated: ₹${initAlloc.toStringAsFixed(0)}'),
+                                duration: const Duration(seconds: 5),
+                                backgroundColor: AppColors.approvedGreen,
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -530,8 +580,10 @@ class _UsersScreenState extends State<UsersScreen> {
     final emailCtrl = TextEditingController(text: user.email);
     final passwordCtrl = TextEditingController();
     final amountCtrl = TextEditingController(text: user.allocatedAmount.toStringAsFixed(0));
-    String selectedRole = user.isAdmin || user.role == 'FOUNDER' ? 'ADMIN' : 'EMPLOYEE';
+    String selectedRole = user.role.isNotEmpty ? user.role : (user.isAdmin ? 'ADMIN' : 'EMPLOYEE');
     bool obscureEditPassword = true;
+    List<RoleModel> availableRoles = [];
+    bool isRolesLoading = true;
 
     showModalBottomSheet(
       context: context,
@@ -539,108 +591,151 @@ class _UsersScreenState extends State<UsersScreen> {
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) => SafeArea(
-          child: Padding(
-            padding: EdgeInsets.only(
-              top: 20,
-              left: 24,
-              right: 24,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Edit User (${user.firstName})',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(ctx),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: nameCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'Full Name',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: emailCtrl,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: InputDecoration(
-                      labelText: 'Email Address',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: passwordCtrl,
-                    obscureText: obscureEditPassword,
-                    decoration: InputDecoration(
-                      labelText: 'New Password (Optional)',
-                      hintText: 'Leave blank to keep unchanged',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          obscureEditPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                          color: Colors.grey.shade600,
+        builder: (context, setModalState) {
+          if (isRolesLoading) {
+            ApiService.getRoles().then((roles) {
+              if (ctx.mounted) {
+                setModalState(() {
+                  availableRoles = roles;
+                  isRolesLoading = false;
+                  if (roles.isNotEmpty && !roles.any((r) => r.code == selectedRole)) {
+                    selectedRole = roles.first.code;
+                  }
+                });
+              }
+            });
+          }
+
+          return SafeArea(
+            child: Padding(
+              padding: EdgeInsets.only(
+                top: 20,
+                left: 24,
+                right: 24,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Edit User (${user.firstName})',
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
-                        onPressed: () {
-                          setModalState(() {
-                            obscureEditPassword = !obscureEditPassword;
-                          });
-                        },
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: nameCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'Full Name',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: amountCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'Allocated Amount (₹)',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: emailCtrl,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: InputDecoration(
+                        labelText: 'Email Address',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: CustomButton(
-                      text: 'Save Changes',
-                      onPressed: () async {
-                        final fullName = nameCtrl.text.trim();
-                        final email = emailCtrl.text.trim();
-                        final allocated = double.tryParse(amountCtrl.text.trim()) ?? user.allocatedAmount;
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: availableRoles.any((r) => r.code == selectedRole) ? selectedRole : (availableRoles.isNotEmpty ? availableRoles.first.code : 'EMPLOYEE'),
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        labelText: 'User Role',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      ),
+                      items: (availableRoles.isNotEmpty
+                              ? availableRoles
+                              : [
+                                  RoleModel(id: 1, name: 'Admin / Founder', code: 'ADMIN'),
+                                  RoleModel(id: 2, name: 'Staff', code: 'STAFF'),
+                                  RoleModel(id: 3, name: 'Accountant', code: 'ACCOUNTANT'),
+                                  RoleModel(id: 4, name: 'Finance Manager', code: 'MANAGER'),
+                                  RoleModel(id: 5, name: 'Finance Auditor', code: 'FINANCE'),
+                                  RoleModel(id: 6, name: 'Employee', code: 'EMPLOYEE'),
+                                ])
+                          .map((r) => DropdownMenuItem<String>(
+                                value: r.code,
+                                child: Text(r.name),
+                              ))
+                          .toList(),
+                      onChanged: (val) {
+                        if (val != null) setModalState(() => selectedRole = val);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: passwordCtrl,
+                      obscureText: obscureEditPassword,
+                      decoration: InputDecoration(
+                        labelText: 'New Password (Optional)',
+                        hintText: 'Leave blank to keep unchanged',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscureEditPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                            color: Colors.grey.shade600,
+                          ),
+                          onPressed: () {
+                            setModalState(() {
+                              obscureEditPassword = !obscureEditPassword;
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: amountCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: 'Allocated Amount (₹)',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: CustomButton(
+                        text: 'Save Changes',
+                        onPressed: () async {
+                          final fullName = nameCtrl.text.trim();
+                          final email = emailCtrl.text.trim();
+                          final allocated = double.tryParse(amountCtrl.text.trim()) ?? user.allocatedAmount;
 
-                        if (fullName.isEmpty || email.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Please fill all required fields'),
-                              backgroundColor: Colors.redAccent,
-                            ),
+                          if (fullName.isEmpty || email.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please fill all required fields'),
+                                backgroundColor: Colors.redAccent,
+                              ),
+                            );
+                            return;
+                          }
+
+                          await ApiService.updateUser(
+                            id: user.id,
+                            fullName: fullName,
+                            email: email,
+                            role: selectedRole,
+                            allocatedAmount: allocated,
+                            password: passwordCtrl.text.trim().isNotEmpty ? passwordCtrl.text.trim() : null,
                           );
-                          return;
-                        }
-
-                        await ApiService.updateUser(
-                          id: user.id,
-                          fullName: fullName,
-                          email: email,
-                          role: user.role,
-                          allocatedAmount: allocated,
-                          password: passwordCtrl.text.trim().isNotEmpty ? passwordCtrl.text.trim() : null,
-                        );
 
                         if (context.mounted) {
                           Navigator.pop(ctx);
@@ -677,9 +772,10 @@ class _UsersScreenState extends State<UsersScreen> {
               ),
             ),
           ),
-        ),
-      ),
-    );
+        );
+      },
+    ),
+  );
   }
 
   Future<void> _handleDeleteUser(UserModel user) async {
@@ -856,6 +952,28 @@ class _UsersScreenState extends State<UsersScreen> {
                       ),
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const RolesScreen()));
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryLight,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.admin_panel_settings_outlined, size: 18, color: AppColors.primary),
+                          SizedBox(width: 4),
+                          Text('Roles', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 16),
@@ -866,20 +984,30 @@ class _UsersScreenState extends State<UsersScreen> {
                   itemCount: displayUsers.length,
                   itemBuilder: (ctx, idx) {
                     final u = displayUsers[idx];
+                    final isOverspent = u.remainingAmount < 0 || (u.usedAmount > u.allocatedAmount && u.allocatedAmount > 0);
+                    final overspendAmt = (u.usedAmount - u.allocatedAmount).clamp(0.0, double.infinity);
+
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: isOverspent ? const Color(0xFFFEF2F2) : Colors.white,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.grey.shade100),
+                        border: Border.all(
+                          color: isOverspent ? const Color(0xFFFCA5A5) : Colors.grey.shade100,
+                          width: isOverspent ? 1.5 : 1.0,
+                        ),
                       ),
                       child: Row(
                         children: [
                           CircleAvatar(
                             radius: 20,
-                            backgroundColor: AppColors.primaryLight,
-                            child: const Icon(Icons.person, color: AppColors.primary, size: 22),
+                            backgroundColor: isOverspent ? Colors.red.shade100 : AppColors.primaryLight,
+                            child: Icon(
+                              isOverspent ? Icons.warning_amber_rounded : Icons.person,
+                              color: isOverspent ? Colors.redAccent : AppColors.primary,
+                              size: 22,
+                            ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -889,20 +1017,54 @@ class _UsersScreenState extends State<UsersScreen> {
                                 Text(u.fullName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                                 const SizedBox(height: 2),
                                 Text(u.email, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                                if (isOverspent) ...[
+                                  const SizedBox(height: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.shade100,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      'Over Budget by ₹${overspendAmt.toStringAsFixed(0)}',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.redAccent,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              Text('₹${u.allocatedAmount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                              Text('Allocated: ₹${u.allocatedAmount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                               const SizedBox(height: 2),
                               Text(
-                                u.isAdmin || u.role == 'FOUNDER' ? 'Admin' : 'Employee',
+                                u.role,
                                 style: TextStyle(
                                   fontSize: 10,
-                                  color: u.isAdmin || u.role == 'FOUNDER' ? AppColors.primary : AppColors.approvedGreen,
+                                  color: u.isAdmin || u.role == 'ADMIN' ? AppColors.primary : AppColors.approvedGreen,
                                   fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                'Used: ₹${u.usedAmount.toStringAsFixed(0)}',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: isOverspent ? Colors.redAccent : Colors.grey.shade600,
+                                  fontWeight: isOverspent ? FontWeight.bold : FontWeight.normal,
+                                ),
+                              ),
+                              Text(
+                                isOverspent ? 'Remaining: -₹${overspendAmt.toStringAsFixed(0)}' : 'Available: ₹${u.remainingAmount.toStringAsFixed(0)}',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: isOverspent ? Colors.redAccent : AppColors.approvedGreen,
                                 ),
                               ),
                             ],

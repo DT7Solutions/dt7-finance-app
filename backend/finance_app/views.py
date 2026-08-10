@@ -4,22 +4,116 @@ from rest_framework.views import APIView
 from django.contrib.auth.models import User
 from django.db.models import Sum, Q, F
 from django.utils import timezone
-from .models import UserProfile, Category, BudgetAllocation, Expense, BudgetRequest, ActivityLog
+from .models import UserProfile, Role, Category, BudgetAllocation, Expense, BudgetRequest, ActivityLog
 from .serializers import (
-    UserDetailSerializer, CategorySerializer, BudgetAllocationSerializer,
+    UserDetailSerializer, RoleSerializer, CategorySerializer, BudgetAllocationSerializer,
     ExpenseSerializer, BudgetRequestSerializer, ActivityLogSerializer
 )
+
+class RoleViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.AllowAny]
+    serializer_class = RoleSerializer
+    queryset = Role.objects.all()
+
+    def get_queryset(self):
+        self._ensure_default_roles()
+        return Role.objects.all().order_by('id')
+
+    def _ensure_default_roles(self):
+        if not Role.objects.exists():
+            default_roles = [
+                {
+                    'name': 'Admin / Founder',
+                    'code': 'ADMIN',
+                    'description': 'Full administrative control over all finances, users, approvals, and system settings.',
+                    'is_system_role': True,
+                    'can_view_all_expenses': True,
+                    'can_approve_expenses': True,
+                    'can_allocate_budget': True,
+                    'can_manage_users': True,
+                    'can_view_analytics': True,
+                },
+                {
+                    'name': 'Staff',
+                    'code': 'STAFF',
+                    'description': 'General staff member access to submit expenses and request budget allocations.',
+                    'is_system_role': True,
+                    'can_view_all_expenses': False,
+                    'can_approve_expenses': False,
+                    'can_allocate_budget': False,
+                    'can_manage_users': False,
+                    'can_view_analytics': False,
+                },
+                {
+                    'name': 'Accountant',
+                    'code': 'ACCOUNTANT',
+                    'description': 'Access to view financial reports, audit logs, and approve expense entries.',
+                    'is_system_role': True,
+                    'can_view_all_expenses': True,
+                    'can_approve_expenses': True,
+                    'can_allocate_budget': False,
+                    'can_manage_users': False,
+                    'can_view_analytics': True,
+                },
+                {
+                    'name': 'Finance Manager',
+                    'code': 'MANAGER',
+                    'description': 'Can manage team budgets, view all expenses, and approve budget requests.',
+                    'is_system_role': True,
+                    'can_view_all_expenses': True,
+                    'can_approve_expenses': True,
+                    'can_allocate_budget': True,
+                    'can_manage_users': False,
+                    'can_view_analytics': True,
+                },
+                {
+                    'name': 'Finance Auditor',
+                    'code': 'FINANCE',
+                    'description': 'View-only access to financial reports, analytics, and expense audit logs.',
+                    'is_system_role': True,
+                    'can_view_all_expenses': True,
+                    'can_approve_expenses': False,
+                    'can_allocate_budget': False,
+                    'can_manage_users': False,
+                    'can_view_analytics': True,
+                },
+                {
+                    'name': 'Employee',
+                    'code': 'EMPLOYEE',
+                    'description': 'Standard employee access to submit expenses, request budgets, and view personal wallet.',
+                    'is_system_role': True,
+                    'can_view_all_expenses': False,
+                    'can_approve_expenses': False,
+                    'can_allocate_budget': False,
+                    'can_manage_users': False,
+                    'can_view_analytics': False,
+                },
+            ]
+            for r in default_roles:
+                Role.objects.get_or_create(code=r['code'], defaults=r)
+
 
 class UserViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.AllowAny]
     serializer_class = UserDetailSerializer
     queryset = User.objects.all().order_by('id')
 
+    def get_queryset(self):
+        qs = User.objects.all().order_by('id')
+        for user in qs:
+            profile, _ = UserProfile.objects.get_or_create(user=user)
+            expected_emp_id = f"DT7EMP{user.id:03d}"
+            if profile.employee_id != expected_emp_id:
+                profile.employee_id = expected_emp_id
+                profile.save()
+        return qs
+
     def create(self, request, *args, **kwargs):
         data = request.data.copy()
         raw_password = data.pop('password', None)
-        role_str = data.pop('role', 'EMPLOYEE')
+        role_str = str(data.pop('role', 'EMPLOYEE')).upper()
         dept_str = data.pop('department', 'Operations')
+        init_amount = float(data.pop('initial_allocated_amount', None) or data.pop('allocated_amount', None) or 0.0)
         
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
@@ -30,20 +124,102 @@ class UserViewSet(viewsets.ModelViewSet):
             user.save()
             
         profile, _ = UserProfile.objects.get_or_create(user=user)
-        if role_str:
-            profile.role = 'ADMIN' if str(role_str).upper() in ['ADMIN', 'FOUNDER'] else 'EMPLOYEE'
+        role_obj = Role.objects.filter(Q(code__iexact=role_str) | Q(name__iexact=role_str)).first()
+        if not role_obj and role_str in ['ADMIN', 'FOUNDER']:
+            role_obj = Role.objects.filter(code='ADMIN').first()
+        
+        profile.role = role_str if role_str else (role_obj.code if role_obj else 'EMPLOYEE')
+        if role_obj:
+            profile.role_fk = role_obj
         if dept_str:
             profile.department = str(dept_str)
+        if init_amount > 0:
+            profile.allocated_budget = init_amount
         profile.save()
+
+        if init_amount > 0:
+            admin_user = request.user if (request.user and request.user.is_authenticated) else User.objects.filter(is_superuser=True).first() or user
+            BudgetAllocation.objects.create(
+                employee=user,
+                allocated_amount=init_amount,
+                note='Initial budget allocation on user creation',
+                allocated_by=admin_user
+            )
 
         headers = self.get_success_headers(serializer.data)
         return Response(self.get_serializer(user).data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        user = self.get_object()
+        data = request.data.copy()
+        
+        role_str = data.pop('role', None)
+        allocated_amount = data.pop('allocated_amount', None)
+        raw_password = data.pop('password', None)
+
+        serializer = self.get_serializer(user, data=data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+
+        if raw_password and isinstance(raw_password, str) and raw_password.strip():
+            user.set_password(raw_password.strip())
+            user.save()
+
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        if role_str:
+            role_code = str(role_str).upper()
+            role_obj = Role.objects.filter(Q(code__iexact=role_code) | Q(name__iexact=role_code)).first()
+            profile.role = role_code
+            if role_obj:
+                profile.role_fk = role_obj
+        
+        if allocated_amount is not None:
+            amt = float(allocated_amount)
+            profile.allocated_budget = amt
+            profile.save()
+            admin_user = request.user if (request.user and request.user.is_authenticated) else User.objects.filter(is_superuser=True).first() or user
+            current_sum = BudgetAllocation.objects.filter(employee=user).aggregate(total=Sum('allocated_amount'))['total'] or 0.0
+            diff = amt - float(current_sum)
+            if diff != 0:
+                BudgetAllocation.objects.create(
+                    employee=user,
+                    allocated_amount=diff,
+                    note=f'Budget set to ₹{amt:.2f}',
+                    allocated_by=admin_user
+                )
+        profile.save()
+
+        return Response(self.get_serializer(user).data)
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.AllowAny]
     serializer_class = CategorySerializer
     queryset = Category.objects.all()
+
+    def get_queryset(self):
+        self._ensure_default_categories()
+        return Category.objects.all().order_by('id')
+
+    def _ensure_default_categories(self):
+        defaults = [
+            {'name': 'Software & SaaS Subscriptions', 'type': 'EXPENSE', 'icon': 'computer', 'color': '#8B5CF6', 'is_custom': False},
+            {'name': 'Cloud Hosting & Infrastructure (AWS/Azure/GCP)', 'type': 'EXPENSE', 'icon': 'cloud', 'color': '#0EA5E9', 'is_custom': False},
+            {'name': 'AI Tools & API Subscriptions (OpenAI/Claude)', 'type': 'EXPENSE', 'icon': 'psychology', 'color': '#EC4899', 'is_custom': False},
+            {'name': 'Purchase of Domain or SSL Certificates', 'type': 'EXPENSE', 'icon': 'dns', 'color': '#2563EB', 'is_custom': False},
+            {'name': 'Hardware & Dev Peripherals (Laptops/Monitors)', 'type': 'EXPENSE', 'icon': 'devices', 'color': '#6366F1', 'is_custom': False},
+            {'name': 'Cybersecurity & Antivirus Software', 'type': 'EXPENSE', 'icon': 'security', 'color': '#EF4444', 'is_custom': False},
+            {'name': 'DevOps & CI/CD Tools (GitHub/Docker)', 'type': 'EXPENSE', 'icon': 'integration_instructions', 'color': '#10B981', 'is_custom': False},
+            {'name': 'IT Consultancy & Technical Services', 'type': 'EXPENSE', 'icon': 'engineering', 'color': '#F59E0B', 'is_custom': False},
+            {'name': 'Network & High-Speed Internet', 'type': 'EXPENSE', 'icon': 'wifi', 'color': '#14B8A6', 'is_custom': False},
+            {'name': 'Office Supplies & Tech Utilities', 'type': 'EXPENSE', 'icon': 'shopping_bag', 'color': '#64748B', 'is_custom': False},
+            {'name': 'Travel & Client On-site Visits', 'type': 'EXPENSE', 'icon': 'directions_car', 'color': '#D97706', 'is_custom': False},
+            {'name': 'Meals & Team Offsites', 'type': 'EXPENSE', 'icon': 'restaurant', 'color': '#F43F5E', 'is_custom': False},
+            {'name': 'Others', 'type': 'EXPENSE', 'icon': 'more_horiz', 'color': '#9CA3AF', 'is_custom': False},
+        ]
+        for c in defaults:
+            Category.objects.get_or_create(name=c['name'], defaults=c)
 
 
 class BudgetAllocationViewSet(viewsets.ModelViewSet):
@@ -54,6 +230,10 @@ class BudgetAllocationViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         user = self.request.user if (self.request.user and self.request.user.is_authenticated) else User.objects.filter(is_superuser=True).first() or User.objects.first()
         alloc = serializer.save(allocated_by=user)
+        if alloc.employee and hasattr(alloc.employee, 'profile'):
+            total_sum = BudgetAllocation.objects.filter(employee=alloc.employee).aggregate(t=Sum('allocated_amount'))['t'] or 0.0
+            alloc.employee.profile.allocated_budget = float(total_sum)
+            alloc.employee.profile.save()
         if user:
             ActivityLog.objects.create(
                 user=user,
@@ -89,12 +269,25 @@ class ExpenseViewSet(viewsets.ModelViewSet):
                 data.pop('date', None)
 
         cat_val = data.get('category')
-        if isinstance(cat_val, int) and not Category.objects.filter(pk=cat_val).exists():
-            data.pop('category', None)
+        if not (isinstance(cat_val, int) and Category.objects.filter(pk=cat_val).exists()):
+            cat_name = data.get('category_name') or 'General'
+            cat_obj = Category.objects.filter(name__iexact=cat_name).first()
+            if not cat_obj:
+                cat_obj = Category.objects.create(name=cat_name, type='EXPENSE', color='#8B5CF6')
+            data['category'] = cat_obj.id
 
         user_val = data.get('user')
-        if isinstance(user_val, int) and not User.objects.filter(pk=user_val).exists():
-            data.pop('user', None)
+        if not (isinstance(user_val, int) and User.objects.filter(pk=user_val).exists()):
+            u_name = data.get('user_name')
+            user_obj = None
+            if u_name:
+                user_obj = User.objects.filter(Q(username__iexact=u_name) | Q(first_name__iexact=u_name) | Q(email__iexact=u_name)).first()
+            if not user_obj and request.user and request.user.is_authenticated:
+                user_obj = request.user
+            if not user_obj:
+                user_obj = User.objects.first()
+            if user_obj:
+                data['user'] = user_obj.id
 
         serializer = self.get_serializer(data=data)
         if not serializer.is_valid():
@@ -297,22 +490,48 @@ class FounderDashboardView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
-        total_allocated = float(BudgetAllocation.objects.aggregate(total=Sum('allocated_amount'))['total'] or 150000.00)
-        if total_allocated <= 0 or total_allocated > 300000.0:
-            total_allocated = 150000.00
-        total_expenses = float(Expense.objects.filter(status='APPROVED').aggregate(total=Sum('amount'))['total'] or 25000.00)
-        remaining_budget = total_allocated - total_expenses
-        total_users = User.objects.count() or 5
-        over_budget_count = 2
+        total_alloc_records = BudgetAllocation.objects.aggregate(total=Sum('allocated_amount'))['total']
+        if total_alloc_records is not None and float(total_alloc_records) > 0:
+            total_allocated = float(total_alloc_records)
+        else:
+            total_allocated = float(UserProfile.objects.aggregate(total=Sum('allocated_budget'))['total'] or 0.0)
 
-        # Category expense breakdown matching UI mock percentages
-        category_breakdown = [
-            {'category': 'Travel', 'percentage': 40, 'amount': total_expenses * 0.40, 'color': '#3B82F6'},
-            {'category': 'Food', 'percentage': 20, 'amount': total_expenses * 0.20, 'color': '#10B981'},
-            {'category': 'Fuel', 'percentage': 15, 'amount': total_expenses * 0.15, 'color': '#F59E0B'},
-            {'category': 'Office', 'percentage': 10, 'amount': total_expenses * 0.10, 'color': '#FF5500'},
-            {'category': 'Others', 'percentage': 15, 'amount': total_expenses * 0.15, 'color': '#8B5CF6'},
-        ]
+        active_expenses = Expense.objects.exclude(status='REJECTED')
+        total_expenses = float(active_expenses.aggregate(total=Sum('amount'))['total'] or 0.0)
+        remaining_budget = total_allocated - total_expenses
+        total_users = User.objects.count()
+
+        # Dynamic calculation of users exceeding budget
+        over_budget_count = 0
+        for u in User.objects.all():
+            u_alloc = BudgetAllocation.objects.filter(employee=u).aggregate(total=Sum('allocated_amount'))['total']
+            if u_alloc is None and hasattr(u, 'profile'):
+                u_alloc = u.profile.allocated_budget
+            u_alloc = float(u_alloc or 0.0)
+            u_spent = float(Expense.objects.filter(user=u).exclude(status='REJECTED').aggregate(total=Sum('amount'))['total'] or 0.0)
+            if u_alloc > 0 and u_spent > u_alloc:
+                over_budget_count += 1
+
+        # Dynamic category breakdown from database
+        category_totals = {}
+        for exp in active_expenses:
+            cat_name = exp.category.name if exp.category else 'General'
+            cat_color = exp.category.color if (exp.category and exp.category.color) else '#8B5CF6'
+            if cat_name not in category_totals:
+                category_totals[cat_name] = {'amount': 0.0, 'color': cat_color}
+            category_totals[cat_name]['amount'] += float(exp.amount)
+
+        category_breakdown = []
+        for cat_name, info in category_totals.items():
+            pct = round((info['amount'] / total_expenses * 100)) if total_expenses > 0 else 0
+            category_breakdown.append({
+                'category': cat_name,
+                'percentage': pct,
+                'amount': info['amount'],
+                'color': info['color']
+            })
+
+        category_breakdown.sort(key=lambda x: x['amount'], reverse=True)
 
         return Response({
             'total_allocated': total_allocated,
@@ -328,11 +547,20 @@ class ReportsView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
-        leaderboard = [
-            {'rank': 1, 'name': 'Rahul Sharma', 'spent_amount': 25000.00},
-            {'rank': 2, 'name': 'John Doe', 'spent_amount': 18500.00},
-            {'rank': 3, 'name': 'Priya Patel', 'spent_amount': 15600.00},
-        ]
+        user_expenses = (
+            Expense.objects.filter(status='APPROVED')
+            .values('user__first_name', 'user__last_name', 'user__username')
+            .annotate(spent_amount=Sum('amount'))
+            .order_by('-spent_amount')[:5]
+        )
+        leaderboard = []
+        for rank, item in enumerate(user_expenses, 1):
+            name = f"{item['user__first_name']} {item['user__last_name']}".strip() or item['user__username']
+            leaderboard.append({
+                'rank': rank,
+                'name': name,
+                'spent_amount': float(item['spent_amount'] or 0.0),
+            })
         return Response({
             'period': 'This Month',
             'top_spending_employees': leaderboard

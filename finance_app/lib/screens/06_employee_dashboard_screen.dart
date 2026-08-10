@@ -181,46 +181,54 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () async {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                        );
-                        _loadData();
-                      },
-                      child: CircleAvatar(
-                        radius: 22,
-                        backgroundColor: AppColors.primaryLight,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(100),
-                          child: _buildAvatarImage(
-                            _profilePhotoUrl ?? 'assets/images/founder_avatar.png',
-                            size: 44,
+                Expanded(
+                  child: Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                          );
+                          _loadData();
+                        },
+                        child: CircleAvatar(
+                          radius: 22,
+                          backgroundColor: AppColors.primaryLight,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(100),
+                            child: _buildAvatarImage(
+                              _profilePhotoUrl ?? 'assets/images/founder_avatar.png',
+                              size: 44,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Hey, $name 👋', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                        const Text('Good morning!', style: TextStyle(color: Colors.grey, fontSize: 11)),
-                      ],
-                    ),
-                  ],
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Hey, $name 👋',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const Text(
+                              'Good morning!',
+                              style: TextStyle(color: Colors.grey, fontSize: 11),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.logout, color: Colors.redAccent),
-                      tooltip: 'Logout',
-                      onPressed: _handleLogout,
-                    ),
-                  ],
+                IconButton(
+                  icon: const Icon(Icons.logout, color: Colors.redAccent),
+                  tooltip: 'Logout',
+                  onPressed: _handleLogout,
                 ),
               ],
             ),
@@ -246,9 +254,9 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                'Budget Overspent Alert!',
-                                style: TextStyle(
+                              Text(
+                                'Budget Overspent by ₹${overspendAmount.toStringAsFixed(0)}!',
+                                style: const TextStyle(
                                   color: Color(0xFF991B1B),
                                   fontWeight: FontWeight.bold,
                                   fontSize: 13,
@@ -256,7 +264,7 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                'You have overspent by ₹${overspendAmount.toStringAsFixed(0)}. Click below to request additional budget allocation from admin.',
+                                'You have spent ₹${used.toStringAsFixed(0)} against your budget of ₹${allocated.toStringAsFixed(0)} (Exceeded budget by ₹${overspendAmount.toStringAsFixed(0)}). Click below to request additional budget.',
                                 style: const TextStyle(
                                   color: Color(0xFFDC2626),
                                   fontSize: 11,
@@ -389,128 +397,148 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
             const SizedBox(height: 12),
 
             // Pending & Rejected Budget Breakdown Row
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFFBEB),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFFFCD34D)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: const [
-                            Icon(Icons.hourglass_empty_rounded, size: 14, color: Color(0xFFD97706)),
-                            SizedBox(width: 4),
-                            Text('Pending Claims', style: TextStyle(fontSize: 11, color: Color(0xFFB45309), fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '₹${_pendingTotal.toStringAsFixed(0)}',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF92400E)),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEF2F2),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFFFCA5A5)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: const [
-                            Icon(Icons.cancel_outlined, size: 14, color: Colors.redAccent),
-                            SizedBox(width: 4),
-                            Text('Rejected Claims', style: TextStyle(fontSize: 11, color: Color(0xFF991B1B), fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '₹${_rejectedTotal.toStringAsFixed(0)}',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFFDC2626)),
-                        ),
-                      ],
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFFBEB),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFFCD34D)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Row(
+                            children: const [
+                              Icon(Icons.hourglass_empty_rounded, size: 14, color: Color(0xFFD97706)),
+                              SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  'Pending Claims',
+                                  style: TextStyle(fontSize: 11, color: Color(0xFFB45309), fontWeight: FontWeight.bold),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '₹${_pendingTotal.toStringAsFixed(0)}',
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF92400E)),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFFCA5A5)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Row(
+                            children: const [
+                              Icon(Icons.cancel_outlined, size: 14, color: Colors.redAccent),
+                              SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  'Rejected Claims',
+                                  style: TextStyle(fontSize: 11, color: Color(0xFF991B1B), fontWeight: FontWeight.bold),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '₹${_rejectedTotal.toStringAsFixed(0)}',
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFFDC2626)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 24),
 
             // Quick Actions
             const Text('Quick Actions', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildQuickActionCard(
-                    context,
-                    icon: Icons.add_circle_outline,
-                    label: 'Add Expense',
-                    color: AppColors.primary,
-                    onTap: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const AddExpenseScreen()),
-                      );
-                      _loadData();
-                    },
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: _buildQuickActionCard(
+                      context,
+                      icon: Icons.add_circle_outline,
+                      label: 'Add Expense',
+                      color: AppColors.primary,
+                      onTap: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const AddExpenseScreen()),
+                        );
+                        _loadData();
+                      },
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildQuickActionCard(
-                    context,
-                    icon: Icons.account_balance_wallet_outlined,
-                    label: 'Request Budget',
-                    color: const Color(0xFF10B981),
-                    onTap: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const BudgetRequestScreen()),
-                      );
-                      _loadData();
-                    },
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildQuickActionCard(
+                      context,
+                      icon: Icons.account_balance_wallet_outlined,
+                      label: 'Request Budget',
+                      color: const Color(0xFF10B981),
+                      onTap: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const BudgetRequestScreen()),
+                        );
+                        _loadData();
+                      },
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildQuickActionCard(
-                    context,
-                    icon: Icons.receipt_long_outlined,
-                    label: 'My Expenses',
-                    color: Colors.blue,
-                    onTap: () {
-                      setState(() => _currentIndex = 1);
-                    },
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildQuickActionCard(
+                      context,
+                      icon: Icons.receipt_long_outlined,
+                      label: 'My Expenses',
+                      color: Colors.blue,
+                      onTap: () {
+                        setState(() => _currentIndex = 1);
+                      },
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildQuickActionCard(
-                    context,
-                    icon: Icons.history,
-                    label: 'History',
-                    color: Colors.purple,
-                    onTap: () {
-                      setState(() => _currentIndex = 2);
-                    },
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildQuickActionCard(
+                      context,
+                      icon: Icons.history,
+                      label: 'History',
+                      color: Colors.purple,
+                      onTap: () {
+                        setState(() => _currentIndex = 2);
+                      },
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
             const SizedBox(height: 24),
 
@@ -575,8 +603,16 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
                             backgroundColor: AppColors.primaryLight,
                             child: const Icon(Icons.receipt, color: AppColors.primary, size: 20),
                           ),
-                          title: Text(exp.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                          subtitle: Text('${exp.categoryName} • ${exp.dateTime}', style: const TextStyle(fontSize: 11)),
+                          title: Text(
+                            exp.title,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            '${exp.categoryName} • ${exp.formattedDate}',
+                            style: const TextStyle(fontSize: 11),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           trailing: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.end,
@@ -606,7 +642,13 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('My Budget Requests Status', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                Expanded(
+                  child: Text(
+                    'My Budget Requests Status',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
                 TextButton(
                   onPressed: () async {
                     await Navigator.push(
@@ -717,19 +759,32 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(14),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
+        height: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
         decoration: BoxDecoration(
           color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: color.withOpacity(0.2)),
         ),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Icon(icon, color: color, size: 26),
+            Icon(icon, color: color, size: 24),
             const SizedBox(height: 6),
-            Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: color,
+                height: 1.15,
+              ),
+            ),
           ],
         ),
       ),

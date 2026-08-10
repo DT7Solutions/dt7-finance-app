@@ -1,12 +1,24 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.db.models import Sum
-from .models import UserProfile, Category, BudgetAllocation, Expense, BudgetRequest, ActivityLog
+from .models import UserProfile, Role, Category, BudgetAllocation, Expense, BudgetRequest, ActivityLog
+
+class RoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Role
+        fields = [
+            'id', 'name', 'code', 'description', 'is_system_role',
+            'can_view_all_expenses', 'can_approve_expenses', 'can_allocate_budget',
+            'can_manage_users', 'can_view_analytics'
+        ]
+
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    role_details = RoleSerializer(source='role_fk', read_only=True)
+
     class Meta:
         model = UserProfile
-        fields = ['role', 'department', 'employee_id', 'phone', 'join_date', 'allocated_budget']
+        fields = ['role', 'role_fk', 'role_details', 'department', 'employee_id', 'phone', 'join_date', 'allocated_budget']
 
 
 class UserDetailSerializer(serializers.ModelSerializer):
@@ -14,25 +26,22 @@ class UserDetailSerializer(serializers.ModelSerializer):
     allocated_amount = serializers.SerializerMethodField()
     used_amount = serializers.SerializerMethodField()
     remaining_amount = serializers.SerializerMethodField()
+    role = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'profile', 'allocated_amount', 'used_amount', 'remaining_amount']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'profile', 'allocated_amount', 'used_amount', 'remaining_amount']
+
+    def get_role(self, obj):
+        if hasattr(obj, 'profile') and obj.profile.role:
+            return obj.profile.role
+        return 'ADMIN' if (obj.is_superuser or obj.username in ['admin', 'founder', 'diya_founder']) else 'EMPLOYEE'
 
     def get_allocated_amount(self, obj):
-        alloc = BudgetAllocation.objects.filter(employee=obj).aggregate(total=Sum('allocated_amount'))['total']
-        if alloc is not None and 0 < alloc <= 100000.0:
-            return float(alloc)
-        uname = (obj.username or '').lower()
-        if uname in ['paul_pk', 'paul']:
-            return 25000.00
-        elif uname in ['neha_singh', 'neha']:
-            return 15000.00
-        elif uname in ['alex_j', 'alex']:
-            return 10000.00
-        elif uname in ['diya', 'diya_m', 'diya_founder']:
-            return 0.00
-        return 25000.00
+        alloc_sum = BudgetAllocation.objects.filter(employee=obj).aggregate(total=Sum('allocated_amount'))['total']
+        alloc_val = float(alloc_sum) if alloc_sum is not None else 0.0
+        prof_val = float(obj.profile.allocated_budget) if (hasattr(obj, 'profile') and obj.profile and obj.profile.allocated_budget) else 0.0
+        return max(alloc_val, prof_val)
 
     def get_used_amount(self, obj):
         used = Expense.objects.filter(user=obj, status='APPROVED').aggregate(total=Sum('amount'))['total']

@@ -386,7 +386,7 @@ class _ExpenseDetailScreenState extends State<ExpenseDetailScreen> {
                     _DetailRow(
                       icon: Icons.calendar_today_outlined,
                       label: 'Date & Time',
-                      value: _currentExpense.dateTime.isNotEmpty ? _currentExpense.dateTime : '06 Aug 2026, 02:30 PM',
+                      value: _currentExpense.formattedDate.isNotEmpty ? _currentExpense.formattedDate : '06 Aug 2026, 02:30 PM',
                     ),
                     const Divider(height: 24),
                     _DetailRow(

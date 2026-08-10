@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../models/expense_model.dart';
 import '../models/budget_request_model.dart';
 import '../models/user_model.dart';
+import '../models/role_model.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
@@ -584,6 +585,8 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
     final amountCtrl = TextEditingController();
     String selectedRole = 'EMPLOYEE';
     bool obscurePassword = true;
+    List<RoleModel> availableRoles = [];
+    bool isRolesLoading = true;
 
     showModalBottomSheet(
       context: context,
@@ -593,150 +596,186 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) => SafeArea(
-          child: Padding(
-            padding: EdgeInsets.only(
-              top: 20,
-              left: 24,
-              right: 24,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Create New User Account',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(ctx),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: nameCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'Full Name',
-                      hintText: 'e.g. Neha Singh',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: emailCtrl,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: InputDecoration(
-                      labelText: 'Email Address',
-                      hintText: 'e.g. neha@dt7.agency',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: passwordCtrl,
-                    obscureText: obscurePassword,
-                    decoration: InputDecoration(
-                      labelText: 'User Password',
-                      hintText: 'Create a custom password for user',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          obscurePassword ? Icons.visibility_off : Icons.visibility,
-                          color: Colors.grey,
+        builder: (context, setModalState) {
+          if (isRolesLoading) {
+            ApiService.getRoles().then((roles) {
+              if (ctx.mounted) {
+                setModalState(() {
+                  availableRoles = roles;
+                  isRolesLoading = false;
+                  if (roles.isNotEmpty && !roles.any((r) => r.code == selectedRole)) {
+                    selectedRole = roles.first.code;
+                  }
+                });
+              }
+            });
+          }
+
+          return SafeArea(
+            child: Padding(
+              padding: EdgeInsets.only(
+                top: 20,
+                left: 24,
+                right: 24,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Create New User Account',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
-                        onPressed: () {
-                          setModalState(() => obscurePassword = !obscurePassword);
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: nameCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'Full Name',
+                        hintText: 'e.g. Neha Singh',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: emailCtrl,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: InputDecoration(
+                        labelText: 'Email Address',
+                        hintText: 'e.g. neha@dt7.agency',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: passwordCtrl,
+                      obscureText: obscurePassword,
+                      decoration: InputDecoration(
+                        labelText: 'User Password',
+                        hintText: 'Create a custom password for user',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscurePassword ? Icons.visibility_off : Icons.visibility,
+                            color: Colors.grey,
+                          ),
+                          onPressed: () {
+                            setModalState(() => obscurePassword = !obscurePassword);
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: availableRoles.any((r) => r.code == selectedRole) ? selectedRole : (availableRoles.isNotEmpty ? availableRoles.first.code : 'EMPLOYEE'),
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        labelText: 'User Role',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      ),
+                      items: (availableRoles.isNotEmpty
+                              ? availableRoles
+                              : [
+                                  RoleModel(id: 1, name: 'Admin / Founder', code: 'ADMIN'),
+                                  RoleModel(id: 2, name: 'Staff', code: 'STAFF'),
+                                  RoleModel(id: 3, name: 'Accountant', code: 'ACCOUNTANT'),
+                                  RoleModel(id: 4, name: 'Finance Manager', code: 'MANAGER'),
+                                  RoleModel(id: 5, name: 'Finance Auditor', code: 'FINANCE'),
+                                  RoleModel(id: 6, name: 'Employee', code: 'EMPLOYEE'),
+                                ])
+                          .map((r) => DropdownMenuItem<String>(
+                                value: r.code,
+                                child: Text(r.name),
+                              ))
+                          .toList(),
+                      onChanged: (val) {
+                        if (val != null) setModalState(() => selectedRole = val);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: amountCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: 'Initial Allocated Amount (₹)',
+                        hintText: 'Enter amount',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: CustomButton(
+                        text: 'Create User Account',
+                        onPressed: () async {
+                          final fullName = nameCtrl.text.trim();
+                          final email = emailCtrl.text.trim();
+                          final password = passwordCtrl.text.trim();
+                          final initAlloc = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
+
+                          if (fullName.isEmpty || email.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please enter full name and email address'),
+                                backgroundColor: Colors.redAccent,
+                              ),
+                            );
+                            return;
+                          }
+
+                          if (password.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please enter a password for the new user'),
+                                backgroundColor: Colors.redAccent,
+                              ),
+                            );
+                            return;
+                          }
+
+                          final uname = email.split('@').first.replaceAll('.', '_');
+
+                          await ApiService.addUser(
+                            username: uname,
+                            email: email,
+                            password: password,
+                            fullName: fullName,
+                            role: selectedRole,
+                            allocatedAmount: initAlloc,
+                          );
+
+                          if (context.mounted) {
+                            Navigator.pop(ctx);
+                            _loadDashboard();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('User "$fullName" created with role $selectedRole! Budget allocated: ₹${initAlloc.toStringAsFixed(0)}'),
+                                duration: const Duration(seconds: 5),
+                                backgroundColor: AppColors.approvedGreen,
+                              ),
+                            );
+                          }
                         },
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: amountCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'Initial Allocated Amount (₹)',
-                      hintText: 'Enter amount',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: CustomButton(
-                      text: 'Create User Account',
-                      onPressed: () async {
-                        final fullName = nameCtrl.text.trim();
-                        final email = emailCtrl.text.trim();
-                        final password = passwordCtrl.text.trim();
-
-                        if (fullName.isEmpty || email.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Please enter full name and email address'),
-                              backgroundColor: Colors.redAccent,
-                            ),
-                          );
-                          return;
-                        }
-
-                        if (password.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Please enter a password for the new user'),
-                              backgroundColor: Colors.redAccent,
-                            ),
-                          );
-                          return;
-                        }
-
-                        final uname = email.split('@').first.replaceAll('.', '_');
-
-                        await ApiService.addUser(
-                          username: uname,
-                          email: email,
-                          password: password,
-                          fullName: fullName,
-                          role: 'EMPLOYEE',
-                        );
-
-                        final amount = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
-                        if (amount > 0) {
-                          final users = await ApiService.getUsers();
-                          final createdUser = users.firstWhere(
-                            (u) => u.email == email || u.username == uname,
-                            orElse: () => users.last,
-                          );
-                          await ApiService.allocateBudget(employeeId: createdUser.id, amount: amount);
-                        }
-
-                        if (context.mounted) {
-                          Navigator.pop(ctx);
-                          _loadDashboard();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('User "$fullName" created with password "$password"!'),
-                              duration: const Duration(seconds: 5),
-                              backgroundColor: AppColors.approvedGreen,
-                            ),
-                          );
-                        }
-                      },
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -920,9 +959,27 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                                                               u.fullName,
                                                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1F2937)),
                                                             ),
-                                                            Text(
-                                                              '${u.department} • ${u.employeeId}',
-                                                              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                                            Row(
+                                                              children: [
+                                                                Text(
+                                                                  '${u.department} • ${u.employeeId}',
+                                                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                                                ),
+                                                                const SizedBox(width: 8),
+                                                                Text(
+                                                                  'Budget: ₹${u.allocatedAmount.toStringAsFixed(0)}',
+                                                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                                                ),
+                                                                const SizedBox(width: 8),
+                                                                Text(
+                                                                  isOver ? 'Available: -₹${(u.usedAmount - u.allocatedAmount).clamp(0.0, double.infinity).toStringAsFixed(0)}' : 'Available: ₹${u.remainingAmount.clamp(0.0, double.infinity).toStringAsFixed(0)}',
+                                                                  style: TextStyle(
+                                                                    fontSize: 11,
+                                                                    fontWeight: FontWeight.bold,
+                                                                    color: isOver ? Colors.redAccent : AppColors.approvedGreen,
+                                                                  ),
+                                                                ),
+                                                              ],
                                                             ),
                                                           ],
                                                         ),
@@ -1215,7 +1272,9 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
-                                isOver ? '🚨 OVER BUDGET' : '$pct% of expenses',
+                                isOver
+                                    ? 'Over Budget by ₹${(spent - u.allocatedAmount).clamp(0.0, double.infinity).toStringAsFixed(0)}'
+                                    : '$pct% of expenses',
                                 style: TextStyle(
                                   fontSize: 9,
                                   fontWeight: FontWeight.bold,
@@ -1292,15 +1351,10 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
       isScrollControlled: true,
       builder: (context) {
         String filterUserMode = 'All';
-
         return StatefulBuilder(
           builder: (context, setModalState) {
-            return Container(
+            return SizedBox(
               height: MediaQuery.of(context).size.height * 0.85,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              ),
               child: Column(
                 children: [
                   Container(
@@ -1317,23 +1371,26 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Expense Breakdown by User',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF1F2937),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Expense Breakdown by User',
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1F2937),
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Who spent the total expenses amount & their claims',
-                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                            ),
-                          ],
+                              const SizedBox(height: 2),
+                              Text(
+                                'Who spent the total expenses amount & their claims',
+                                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
                         ),
                         IconButton(
                           icon: const Icon(Icons.close),
@@ -1424,7 +1481,8 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                                 ],
                               ),
                             ),
-                            Padding(
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                               child: Row(
                                 children: [
@@ -1493,27 +1551,27 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                                         final uExpenses = userExpenseMap[u.id] ?? [];
                                         final totalForPct = totalExpenseAmount > 0 ? totalExpenseAmount : (spent > 0 ? spent : 1.0);
                                         final pct = ((spent / totalForPct) * 100).toStringAsFixed(1);
+                                        final isOver = (spent > u.allocatedAmount || u.remainingAmount < 0) && u.allocatedAmount > 0;
 
                                         return Card(
                                           margin: const EdgeInsets.only(bottom: 12),
                                           elevation: 0.5,
                                           shape: RoundedRectangleBorder(
                                             borderRadius: BorderRadius.circular(16),
-                                            side: BorderSide(color: Colors.grey.shade200),
+                                            side: BorderSide(color: isOver ? const Color(0xFFFCA5A5) : Colors.grey.shade200),
                                           ),
                                           child: ExpansionTile(
                                             tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                                             childrenPadding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
                                             leading: CircleAvatar(
                                               radius: 22,
-                                              backgroundColor: AppColors.primaryLight,
+                                              backgroundColor: isOver ? const Color(0xFFFEF2F2) : AppColors.primaryLight,
                                               child: Text(
                                                 u.fullName.isNotEmpty ? u.fullName[0].toUpperCase() : 'U',
-                                                style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 16),
+                                                style: TextStyle(fontWeight: FontWeight.bold, color: isOver ? const Color(0xFFEF4444) : AppColors.primary, fontSize: 16),
                                               ),
                                             ),
                                             title: Row(
-                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                               children: [
                                                 Expanded(
                                                   child: Column(
@@ -1522,48 +1580,58 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                                                       Text(
                                                         u.fullName,
                                                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1F2937)),
+                                                        overflow: TextOverflow.ellipsis,
                                                       ),
                                                       Text(
-                                                        '${u.department} • ${u.employeeId}',
+                                                        '${u.department} • ${uExpenses.length} Claims',
                                                         style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                                        overflow: TextOverflow.ellipsis,
                                                       ),
                                                     ],
                                                   ),
                                                 ),
+                                                const SizedBox(width: 8),
                                                 Column(
                                                   crossAxisAlignment: CrossAxisAlignment.end,
                                                   children: [
                                                     Text(
                                                       '₹${spent.toStringAsFixed(0)}',
-                                                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Color(0xFFFF5500)),
+                                                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: Color(0xFFFF5500)),
                                                     ),
                                                     Text(
-                                                      '$pct% of total',
-                                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade600),
+                                                      isOver ? 'Over Budget' : '$pct% of total',
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: isOver ? const Color(0xFFEF4444) : AppColors.primary,
+                                                      ),
                                                     ),
                                                   ],
                                                 ),
                                               ],
                                             ),
                                             subtitle: Padding(
-                                              padding: const EdgeInsets.only(top: 6),
+                                              padding: const EdgeInsets.only(top: 4),
                                               child: Row(
                                                 children: [
-                                                  Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.grey.shade100,
-                                                      borderRadius: BorderRadius.circular(8),
-                                                    ),
-                                                    child: Text(
-                                                      '${uExpenses.length} Claims',
-                                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey.shade700),
-                                                    ),
+                                                  Icon(
+                                                    isOver ? Icons.warning_amber_rounded : Icons.account_balance_wallet_outlined,
+                                                    size: 13,
+                                                    color: isOver ? Colors.redAccent : AppColors.approvedGreen,
                                                   ),
-                                                  const SizedBox(width: 8),
-                                                  Text(
-                                                    'Budget: ₹${u.allocatedAmount.toStringAsFixed(0)}',
-                                                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                                  const SizedBox(width: 4),
+                                                  Expanded(
+                                                    child: Text(
+                                                      isOver
+                                                          ? 'Over Budget by ₹${(spent - u.allocatedAmount).clamp(0.0, double.infinity).toStringAsFixed(0)}'
+                                                          : 'Available: ₹${u.remainingAmount.clamp(0.0, double.infinity).toStringAsFixed(0)} (Budget: ₹${u.allocatedAmount.toStringAsFixed(0)})',
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        fontWeight: FontWeight.w600,
+                                                        color: isOver ? Colors.redAccent : AppColors.approvedGreen,
+                                                      ),
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
                                                   ),
                                                 ],
                                               ),
@@ -1682,7 +1750,9 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
 
     final remaining = (_dashboardData?['remaining_budget'] as double?) ?? 0.0;
     final allocated = (_dashboardData?['total_allocated'] as double?) ?? 0.0;
-    final expenses = (_dashboardData?['total_expenses'] as double?) ?? 0.0;
+    final backendExpenses = (_dashboardData?['total_expenses'] as double?) ?? 0.0;
+    final activeExpensesSum = _allExpenses.where((e) => !e.isRejected).fold(0.0, (s, e) => s + e.amount);
+    final expenses = backendExpenses > 0 ? backendExpenses : activeExpensesSum;
     final users = (_dashboardData?['total_users'] as int?) ?? 0;
     final overBudget = (_dashboardData?['over_budget'] as int?) ?? 0;
     final isNegative = remaining < 0;
@@ -2033,10 +2103,22 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
   Widget build(BuildContext context) {
     final screens = [
       _buildFounderTab(),
-      UsersScreen(onBackPressed: () => setState(() => _currentIndex = 0)),
-      AllocateBudgetScreen(onBackPressed: () => setState(() => _currentIndex = 0)),
-      MyExpensesScreen(onBackPressed: () => setState(() => _currentIndex = 0)),
-      ReportsScreen(onBackPressed: () => setState(() => _currentIndex = 0)),
+      UsersScreen(onBackPressed: () {
+        setState(() => _currentIndex = 0);
+        _loadDashboard();
+      }),
+      AllocateBudgetScreen(onBackPressed: () {
+        setState(() => _currentIndex = 0);
+        _loadDashboard();
+      }),
+      MyExpensesScreen(onBackPressed: () {
+        setState(() => _currentIndex = 0);
+        _loadDashboard();
+      }),
+      ReportsScreen(onBackPressed: () {
+        setState(() => _currentIndex = 0);
+        _loadDashboard();
+      }),
     ];
 
     return PopScope(
@@ -2046,6 +2128,7 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
           setState(() {
             _currentIndex = 0;
           });
+          _loadDashboard();
         }
       },
       child: Scaffold(
@@ -2053,17 +2136,13 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
         backgroundColor: Colors.white,
         drawer: AppDrawer(
           currentRoute: _currentRouteName,
-          onSelectTab: (idx) => setState(() => _currentIndex = idx),
+          onSelectTab: (idx) {
+            setState(() => _currentIndex = idx);
+            if (idx == 0) _loadDashboard();
+          },
           onShowBudgetBreakdown: () => _showBudgetSpendingBreakdownModal(context),
         ),
-        floatingActionButton: _currentIndex == 0
-            ? FloatingActionButton.extended(
-                backgroundColor: AppColors.primary,
-                icon: const Icon(Icons.person_add_alt_1_rounded, color: Colors.white),
-                label: const Text('Add User', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                onPressed: () => _showAddUserModal(context),
-              )
-            : null,
+        floatingActionButton: null,
         body: SafeArea(
           child: _isLoading
               ? const Center(child: CircularProgressIndicator())

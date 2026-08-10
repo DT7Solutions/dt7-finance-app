@@ -366,7 +366,7 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
                                             ),
                                             const SizedBox(height: 4),
                                             Text(
-                                              '${item.categoryName} • ${item.dateTime}',
+                                              '${item.categoryName} • ${item.formattedDate}',
                                               style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
                                               overflow: TextOverflow.ellipsis,
                                             ),

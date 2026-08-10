@@ -12,6 +12,7 @@ import '../models/category_model.dart';
 import '../models/account_model.dart';
 import '../models/transaction_model.dart';
 import '../models/budget_model.dart';
+import '../models/role_model.dart';
 
 class ApiService {
   static Future<Map<String, String>> _getHeaders() async {
@@ -45,74 +46,11 @@ class ApiService {
         final List dynamicList = jsonDecode(savedStr);
         final loaded = dynamicList.map((i) => UserModel.fromJson(Map<String, dynamic>.from(i))).toList();
         _storedUsers.clear();
-        _storedUsers.addAll(loaded.map((u) {
-          double sanitizedAlloc = u.allocatedAmount;
-          if (sanitizedAlloc > 100000.0) {
-            final uname = u.username.toLowerCase();
-            if (uname.contains('paul')) sanitizedAlloc = 25000.0;
-            else if (uname.contains('neha')) sanitizedAlloc = 15000.0;
-            else if (uname.contains('alex')) sanitizedAlloc = 10000.0;
-            else sanitizedAlloc = 25000.0;
-          }
-          return UserModel(
-            id: u.id,
-            username: u.username,
-            email: u.email,
-            firstName: u.firstName,
-            lastName: u.lastName,
-            role: u.role,
-            department: u.department,
-            employeeId: u.employeeId,
-            allocatedAmount: sanitizedAlloc,
-            usedAmount: u.usedAmount,
-            remainingAmount: sanitizedAlloc - u.usedAmount,
-          );
-        }));
+        _storedUsers.addAll(loaded);
       }
     } catch (_) {}
 
     if (_storedUsers.isEmpty) {
-      _storedUsers.addAll([
-        UserModel(
-          id: 1,
-          username: 'paul_pk',
-          email: 'paul@dt7.agency',
-          firstName: 'Paul',
-          lastName: 'PK',
-          role: 'EMPLOYEE',
-          department: 'Engineering',
-          employeeId: 'DT7EMP001',
-          allocatedAmount: 25000.0,
-          usedAmount: 8000.0,
-          remainingAmount: 17000.0,
-        ),
-        UserModel(
-          id: 2,
-          username: 'neha_singh',
-          email: 'neha@dt7.agency',
-          firstName: 'Neha',
-          lastName: 'Singh',
-          role: 'EMPLOYEE',
-          department: 'Design & UI',
-          employeeId: 'DT7EMP002',
-          allocatedAmount: 15000.0,
-          usedAmount: 5000.0,
-          remainingAmount: 10000.0,
-        ),
-        UserModel(
-          id: 3,
-          username: 'alex_j',
-          email: 'alex@dt7.agency',
-          firstName: 'Alex',
-          lastName: 'Johnson',
-          role: 'EMPLOYEE',
-          department: 'Marketing',
-          employeeId: 'DT7EMP003',
-          allocatedAmount: 10000.0,
-          usedAmount: 12000.0,
-          remainingAmount: -2000.0,
-        ),
-      ]);
       await _saveUsersToPrefs();
     }
   }
@@ -124,36 +62,13 @@ class ApiService {
     for (final hostUrl in AuthService.candidateUrls) {
       final url = Uri.parse('$hostUrl/users/');
       try {
-        final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 500));
+        final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 2000));
         if (response.statusCode == 200) {
           AuthService.setActiveBaseUrl(hostUrl);
           final data = jsonDecode(response.body);
           final results = data['results'] ?? data;
-          if (results is List && results.isNotEmpty) {
-            final parsedUsers = (results).map((i) => UserModel.fromJson(i)).map((pu) {
-              double alloc = pu.allocatedAmount;
-              if (alloc <= 0 || alloc > 100000.0) {
-                final localIdx = _storedUsers.indexWhere((u) => u.id == pu.id || u.username.toLowerCase() == pu.username.toLowerCase());
-                if (localIdx != -1 && _storedUsers[localIdx].allocatedAmount > 0 && _storedUsers[localIdx].allocatedAmount <= 100000.0) {
-                  alloc = _storedUsers[localIdx].allocatedAmount;
-                } else {
-                  alloc = 25000.0;
-                }
-              }
-              return UserModel(
-                id: pu.id,
-                username: pu.username,
-                email: pu.email,
-                firstName: pu.firstName,
-                lastName: pu.lastName,
-                role: pu.role,
-                department: pu.department,
-                employeeId: pu.employeeId,
-                allocatedAmount: alloc,
-                usedAmount: pu.usedAmount,
-                remainingAmount: alloc - pu.usedAmount,
-              );
-            }).toList();
+          if (results is List) {
+            final parsedUsers = (results).map((i) => UserModel.fromJson(i)).toList();
             _storedUsers.clear();
             _storedUsers.addAll(parsedUsers);
             await _saveUsersToPrefs();
@@ -186,7 +101,11 @@ class ApiService {
       );
     }).toList();
 
-    return updatedUsers;
+    _storedUsers.clear();
+    _storedUsers.addAll(updatedUsers);
+    await _saveUsersToPrefs();
+
+    return List.from(_storedUsers);
   }
 
   static bool isExpenseOwnedByUser(ExpenseModel exp, UserModel? user) {
@@ -318,6 +237,7 @@ class ApiService {
     required String password,
     required String fullName,
     String role = 'EMPLOYEE',
+    double allocatedAmount = 0.0,
   }) async {
     final nameParts = fullName.split(' ');
     final firstName = nameParts.first;
@@ -336,6 +256,7 @@ class ApiService {
             'first_name': firstName,
             'last_name': lastName,
             'role': role,
+            'initial_allocated_amount': allocatedAmount,
           }),
         ).timeout(const Duration(milliseconds: 2000));
         if (response.statusCode == 201 || response.statusCode == 200) {
@@ -354,12 +275,153 @@ class ApiService {
       role: role,
       department: 'Operations',
       employeeId: 'DT7EMP00${_storedUsers.length + 1}',
-      allocatedAmount: 0.0,
+      allocatedAmount: allocatedAmount,
       usedAmount: 0.0,
-      remainingAmount: 0.0,
+      remainingAmount: allocatedAmount,
     );
     _storedUsers.add(newUser);
     await _saveUsersToPrefs();
+    return true;
+  }
+
+  // --- ROLES MANAGEMENT ---
+  static final List<RoleModel> _defaultRoles = [
+    RoleModel(
+      id: 1,
+      name: 'Admin / Founder',
+      code: 'ADMIN',
+      description: 'Full administrative control over all finances, users, approvals, and system settings.',
+      isSystemRole: true,
+      canViewAllExpenses: true,
+      canApproveExpenses: true,
+      canAllocateBudget: true,
+      canManageUsers: true,
+      canViewAnalytics: true,
+    ),
+    RoleModel(
+      id: 2,
+      name: 'Staff',
+      code: 'STAFF',
+      description: 'General staff member access to submit expenses and request budget allocations.',
+      isSystemRole: true,
+      canViewAllExpenses: false,
+      canApproveExpenses: false,
+      canAllocateBudget: false,
+      canManageUsers: false,
+      canViewAnalytics: false,
+    ),
+    RoleModel(
+      id: 3,
+      name: 'Accountant',
+      code: 'ACCOUNTANT',
+      description: 'Access to view financial reports, audit logs, and approve expense entries.',
+      isSystemRole: true,
+      canViewAllExpenses: true,
+      canApproveExpenses: true,
+      canAllocateBudget: false,
+      canManageUsers: false,
+      canViewAnalytics: true,
+    ),
+    RoleModel(
+      id: 4,
+      name: 'Finance Manager',
+      code: 'MANAGER',
+      description: 'Can manage team budgets, view all expenses, and approve budget and expense requests.',
+      isSystemRole: true,
+      canViewAllExpenses: true,
+      canApproveExpenses: true,
+      canAllocateBudget: true,
+      canManageUsers: false,
+      canViewAnalytics: true,
+    ),
+    RoleModel(
+      id: 5,
+      name: 'Finance Auditor',
+      code: 'FINANCE',
+      description: 'View-only access to financial reports, analytics, and expense audit logs.',
+      isSystemRole: true,
+      canViewAllExpenses: true,
+      canApproveExpenses: false,
+      canAllocateBudget: false,
+      canManageUsers: false,
+      canViewAnalytics: true,
+    ),
+    RoleModel(
+      id: 6,
+      name: 'Employee',
+      code: 'EMPLOYEE',
+      description: 'Standard employee access to submit expenses, request budgets, and view personal wallet.',
+      isSystemRole: true,
+      canViewAllExpenses: false,
+      canApproveExpenses: false,
+      canAllocateBudget: false,
+      canManageUsers: false,
+      canViewAnalytics: false,
+    ),
+  ];
+
+  static Future<List<RoleModel>> getRoles() async {
+    for (final hostUrl in AuthService.candidateUrls) {
+      final url = Uri.parse('$hostUrl/roles/');
+      try {
+        final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 1500));
+        if (response.statusCode == 200) {
+          AuthService.setActiveBaseUrl(hostUrl);
+          final data = jsonDecode(response.body);
+          final results = data['results'] ?? data;
+          if (results is List && results.isNotEmpty) {
+            return (results).map((i) => RoleModel.fromJson(i)).toList();
+          }
+        }
+      } catch (_) {}
+    }
+    return List.from(_defaultRoles);
+  }
+
+  static Future<bool> createRole(RoleModel role) async {
+    for (final hostUrl in AuthService.candidateUrls) {
+      final url = Uri.parse('$hostUrl/roles/');
+      try {
+        final response = await http.post(
+          url,
+          headers: await _getHeaders(),
+          body: jsonEncode(role.toJson()),
+        ).timeout(const Duration(milliseconds: 2000));
+        if (response.statusCode == 201 || response.statusCode == 200) {
+          return true;
+        }
+      } catch (_) {}
+    }
+    return true;
+  }
+
+  static Future<bool> updateRole(RoleModel role) async {
+    for (final hostUrl in AuthService.candidateUrls) {
+      final url = Uri.parse('$hostUrl/roles/${role.id}/');
+      try {
+        final response = await http.patch(
+          url,
+          headers: await _getHeaders(),
+          body: jsonEncode(role.toJson()),
+        ).timeout(const Duration(milliseconds: 2000));
+        if (response.statusCode == 200) {
+          return true;
+        }
+      } catch (_) {}
+    }
+    return true;
+  }
+
+  static Future<bool> deleteRole(int roleId) async {
+    for (final hostUrl in AuthService.candidateUrls) {
+      final url = Uri.parse('$hostUrl/roles/$roleId/');
+      try {
+        final response = await http.delete(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 1500));
+        if (response.statusCode == 200 || response.statusCode == 204) {
+          return true;
+        }
+      } catch (_) {}
+    }
     return true;
   }
 
@@ -439,15 +501,19 @@ class ApiService {
   }
 
   static final List<CategoryModel> _defaultCategories = [
-    CategoryModel(id: 1, name: 'Software Tools', type: 'EXPENSE', icon: 'computer', color: '#8B5CF6'),
-    CategoryModel(id: 2, name: 'AI Subscriptions', type: 'EXPENSE', icon: 'psychology', color: '#EC4899'),
-    CategoryModel(id: 3, name: 'Purchase of Domain or Server', type: 'EXPENSE', icon: 'dns', color: '#2563EB'),
-    CategoryModel(id: 4, name: 'Cloud Infrastructure & Hosting', type: 'EXPENSE', icon: 'cloud', color: '#0EA5E9'),
-    CategoryModel(id: 5, name: 'API & Third-Party Services', type: 'EXPENSE', icon: 'api', color: '#10B981'),
-    CategoryModel(id: 6, name: 'Hardware & Dev Peripherals', type: 'EXPENSE', icon: 'devices', color: '#6366F1'),
-    CategoryModel(id: 7, name: 'Travel & Client Visits', type: 'EXPENSE', icon: 'directions_car', color: '#F59E0B'),
-    CategoryModel(id: 8, name: 'Office Supplies & Utilities', type: 'EXPENSE', icon: 'shopping_bag', color: '#64748B'),
-    CategoryModel(id: 9, name: 'Others', type: 'EXPENSE', icon: 'more_horiz', color: '#9CA3AF'),
+    CategoryModel(id: 1, name: 'Software & SaaS Subscriptions', type: 'EXPENSE', icon: 'computer', color: '#8B5CF6'),
+    CategoryModel(id: 2, name: 'Cloud Hosting & Infrastructure (AWS/Azure/GCP)', type: 'EXPENSE', icon: 'cloud', color: '#0EA5E9'),
+    CategoryModel(id: 3, name: 'AI Tools & API Subscriptions (OpenAI/Claude)', type: 'EXPENSE', icon: 'psychology', color: '#EC4899'),
+    CategoryModel(id: 4, name: 'Purchase of Domain or SSL Certificates', type: 'EXPENSE', icon: 'dns', color: '#2563EB'),
+    CategoryModel(id: 5, name: 'Hardware & Dev Peripherals (Laptops/Monitors)', type: 'EXPENSE', icon: 'devices', color: '#6366F1'),
+    CategoryModel(id: 6, name: 'Cybersecurity & Antivirus Software', type: 'EXPENSE', icon: 'security', color: '#EF4444'),
+    CategoryModel(id: 7, name: 'DevOps & CI/CD Tools (GitHub/Docker)', type: 'EXPENSE', icon: 'integration_instructions', color: '#10B981'),
+    CategoryModel(id: 8, name: 'IT Consultancy & Technical Services', type: 'EXPENSE', icon: 'engineering', color: '#F59E0B'),
+    CategoryModel(id: 9, name: 'Network & High-Speed Internet', type: 'EXPENSE', icon: 'wifi', color: '#14B8A6'),
+    CategoryModel(id: 10, name: 'Office Supplies & Tech Utilities', type: 'EXPENSE', icon: 'shopping_bag', color: '#64748B'),
+    CategoryModel(id: 11, name: 'Travel & Client On-site Visits', type: 'EXPENSE', icon: 'directions_car', color: '#D97706'),
+    CategoryModel(id: 12, name: 'Meals & Team Offsites', type: 'EXPENSE', icon: 'restaurant', color: '#F43F5E'),
+    CategoryModel(id: 13, name: 'Others', type: 'EXPENSE', icon: 'more_horiz', color: '#9CA3AF'),
   ];
 
   static Future<List<CategoryModel>> getCategories() async {
@@ -497,7 +563,7 @@ class ApiService {
     required int employeeId,
     required double amount,
     String? note,
-    bool isAddition = false,
+    bool isAddition = true,
   }) async {
     await _ensureUsersLoaded();
     final index = _storedUsers.indexWhere((u) => u.id == employeeId);
@@ -512,14 +578,15 @@ class ApiService {
         incrementalAmount = amount;
       } else {
         targetTotal = amount;
-        incrementalAmount = amount > currentAlloc ? amount - currentAlloc : 0.0;
+        incrementalAmount = amount - currentAlloc;
       }
     }
 
-    for (final hostUrl in AuthService.candidateBaseUrls) {
+    // 1. Send allocation record to /allocations/
+    for (final hostUrl in AuthService.candidateUrls) {
       final url = Uri.parse('$hostUrl/allocations/');
       try {
-        final response = await http.post(
+        final resp = await http.post(
           url,
           headers: await _getHeaders(),
           body: jsonEncode({
@@ -528,7 +595,26 @@ class ApiService {
             'note': note ?? '',
           }),
         ).timeout(const Duration(milliseconds: 2000));
-        if (response.statusCode == 201 || response.statusCode == 200) {
+        if (resp.statusCode == 201 || resp.statusCode == 200) {
+          AuthService.setActiveBaseUrl(hostUrl);
+        }
+      } catch (_) {}
+    }
+
+    // 2. Also patch user to guarantee allocated_amount is saved directly on user profile in backend database
+    for (final hostUrl in AuthService.candidateUrls) {
+      final url = Uri.parse('$hostUrl/users/$employeeId/');
+      try {
+        final response = await http.patch(
+          url,
+          headers: await _getHeaders(),
+          body: jsonEncode({
+            'allocated_amount': targetTotal,
+          }),
+        ).timeout(const Duration(milliseconds: 2000));
+        if (response.statusCode == 200) {
+          AuthService.setActiveBaseUrl(hostUrl);
+          await getUsers(); // Reload updated users list directly from PostgreSQL
           break;
         }
       } catch (_) {}
@@ -584,41 +670,6 @@ class ApiService {
       }
     } catch (_) {}
     if (_storedExpenses.isEmpty) {
-      _storedExpenses.addAll([
-        ExpenseModel(
-          id: 101,
-          title: 'AWS Cloud Hosting & Server Infrastructure',
-          amount: 8000.0,
-          categoryId: 4,
-          categoryName: 'Cloud Infrastructure & Hosting',
-          userName: 'Paul PK',
-          dateTime: '07 Aug 2026, 09:30 AM',
-          status: 'APPROVED',
-          description: 'Monthly production cloud server cluster hosting',
-        ),
-        ExpenseModel(
-          id: 102,
-          title: 'Figma Professional Team Plan',
-          amount: 5000.0,
-          categoryId: 1,
-          categoryName: 'Software Tools',
-          userName: 'Neha Singh',
-          dateTime: '05 Aug 2026, 11:00 AM',
-          status: 'APPROVED',
-          description: 'UI/UX team design software licenses',
-        ),
-        ExpenseModel(
-          id: 103,
-          title: 'Meta Ads & Growth Marketing Tools',
-          amount: 12000.0,
-          categoryId: 5,
-          categoryName: 'API & Third-Party Services',
-          userName: 'Alex Johnson',
-          dateTime: '03 Aug 2026, 01:45 PM',
-          status: 'APPROVED',
-          description: 'Client campaign ad spend and marketing tools',
-        ),
-      ]);
       await _saveExpensesToPrefs();
     }
   }
@@ -634,7 +685,7 @@ class ApiService {
           AuthService.setActiveBaseUrl(hostUrl);
           final data = jsonDecode(response.body);
           final results = data['results'] ?? data;
-          if (results is List && results.isNotEmpty) {
+          if (results is List) {
             final fetched = (results).map((i) => ExpenseModel.fromJson(i)).toList();
             _storedExpenses.clear();
             _storedExpenses.addAll(fetched);
@@ -711,10 +762,12 @@ class ApiService {
           body: jsonEncode({
             'title': title,
             'amount': amount,
+            'category': categoryId,
             'category_name': catName,
-            'date_time': DateTime.now().toIso8601String(),
-            'description': note ?? description ?? '',
+            'user': currentUser?.id,
             'user_name': expUser,
+            'date_time': dateTime ?? DateTime.now().toIso8601String(),
+            'description': note ?? description ?? '',
             'status': 'PENDING',
             if (receiptPath != null) 'receipt_image': receiptPath,
           }),
@@ -942,15 +995,6 @@ class ApiService {
       }
     } catch (_) {}
     if (_storedBudgetRequests.isEmpty) {
-      _storedBudgetRequests.add(BudgetRequestModel(
-        id: 201,
-        userName: 'Paul PK',
-        requestAmount: 5000.0,
-        categoryName: 'Software Tools',
-        reason: 'Additional cloud server hosting and API quota',
-        status: 'PENDING',
-        createdAt: '07 Aug 2026',
-      ));
       await _saveBudgetRequestsToPrefs();
     }
   }
@@ -967,14 +1011,8 @@ class ApiService {
           final results = data['results'] ?? data;
           if (results is List) {
             final fetched = (results).map((i) => BudgetRequestModel.fromJson(i)).toList();
-            for (final item in fetched) {
-              final idx = _storedBudgetRequests.indexWhere((r) => r.id == item.id);
-              if (idx != -1) {
-                _storedBudgetRequests[idx] = item;
-              } else {
-                _storedBudgetRequests.add(item);
-              }
-            }
+            _storedBudgetRequests.clear();
+            _storedBudgetRequests.addAll(fetched);
             await _saveBudgetRequestsToPrefs();
             return List.from(_storedBudgetRequests);
           }
@@ -1153,20 +1191,18 @@ class ApiService {
 
   // --- DASHBOARDS ---
   static Future<Map<String, dynamic>?> getFounderDashboard() async {
-    if (await AuthService.hasRealToken()) {
-      for (final hostUrl in AuthService.candidateUrls) {
-        final url = Uri.parse('$hostUrl/dashboard/founder/');
-        try {
-          final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 500));
-          if (response.statusCode == 200) {
-            AuthService.setActiveBaseUrl(hostUrl);
-            final data = jsonDecode(response.body);
-            if (data is Map<String, dynamic>) {
-              return data;
-            }
+    for (final hostUrl in AuthService.candidateUrls) {
+      final url = Uri.parse('$hostUrl/dashboard/founder/');
+      try {
+        final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 1500));
+        if (response.statusCode == 200) {
+          AuthService.setActiveBaseUrl(hostUrl);
+          final data = jsonDecode(response.body);
+          if (data is Map<String, dynamic>) {
+            return data;
           }
-        } catch (_) {}
-      }
+        }
+      } catch (_) {}
     }
 
     final users = await getUsers();
@@ -1179,7 +1215,7 @@ class ApiService {
     int overBudgetCount = 0;
 
     for (var u in users) {
-      if (u.allocatedAmount > 0 && u.allocatedAmount <= 100000.0) {
+      if (u.allocatedAmount > 0) {
         totalAllocated += u.allocatedAmount;
       }
 
@@ -1188,10 +1224,6 @@ class ApiService {
       if ((spent > u.allocatedAmount || (u.allocatedAmount - spent) < 0) && u.allocatedAmount > 0) {
         overBudgetCount++;
       }
-    }
-
-    if (totalAllocated <= 0 || totalAllocated > 300000.0) {
-      totalAllocated = 150000.0;
     }
 
     final remaining = totalAllocated - totalExpensesSum;
@@ -1293,9 +1325,9 @@ class ApiService {
     return list;
   }
 
-  static Future<List<TransactionModel>> getTransactions() async {
+  static Future<List<TransactionModel>> getTransactions({String? type}) async {
     await _ensureExpensesLoaded();
-    return _storedExpenses.map((e) => TransactionModel(
+    final list = _storedExpenses.map((e) => TransactionModel(
       id: e.id,
       accountId: 1,
       title: e.title,
@@ -1303,6 +1335,10 @@ class ApiService {
       transactionType: 'EXPENSE',
       date: e.dateTime,
     )).toList();
+    if (type != null && type.isNotEmpty && type != 'ALL') {
+      return list.where((t) => t.transactionType.toUpperCase() == type.toUpperCase()).toList();
+    }
+    return list;
   }
 
   static Future<bool> createTransaction({

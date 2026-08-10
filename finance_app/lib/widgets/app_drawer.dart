@@ -13,7 +13,9 @@ import '../screens/11_approvals_screen.dart';
 import '../screens/12_budget_request_screen.dart';
 import '../screens/13_reports_screen.dart';
 import '../screens/14_activity_log_screen.dart';
+import '../screens/06_employee_dashboard_screen.dart';
 import '../screens/15_profile_screen.dart';
+import '../screens/16_roles_screen.dart';
 
 class AppDrawer extends StatefulWidget {
   final String currentRoute;
@@ -122,66 +124,108 @@ class _AppDrawerState extends State<AppDrawer> {
             ),
           ),
           Expanded(
-            child: ListView(
-              padding: EdgeInsets.zero,
-              children: [
-                _DrawerTile(
-                  icon: Icons.dashboard_rounded,
-                  title: 'Founder Dashboard',
-                  isSelected: widget.currentRoute == 'dashboard',
-                  onTap: () => _navigate(context, const FounderDashboardScreen()),
-                ),
-                _DrawerTile(
-                  icon: Icons.people_alt_rounded,
-                  title: 'Manage Users & Teams',
-                  isSelected: widget.currentRoute == 'users',
-                  onTap: () => _navigate(context, const UsersScreen()),
-                ),
-                _DrawerTile(
-                  icon: Icons.account_balance_wallet_rounded,
-                  title: 'Allocate Employee Budget',
-                  isSelected: widget.currentRoute == 'allocate_budget',
-                  onTap: () => _navigate(context, const AllocateBudgetScreen()),
-                ),
-                _DrawerTile(
-                  icon: Icons.fact_check_rounded,
-                  title: 'Approval Requests',
-                  isSelected: widget.currentRoute == 'approvals',
-                  onTap: () => _navigate(context, const ApprovalsScreen()),
-                ),
-                _DrawerTile(
-                  icon: Icons.bar_chart_rounded,
-                  title: 'Analytics & Financial Reports',
-                  isSelected: widget.currentRoute == 'reports',
-                  onTap: () => _navigate(context, const ReportsScreen()),
-                ),
-                _DrawerTile(
-                  icon: Icons.history_rounded,
-                  title: 'Audit & Activity Log',
-                  isSelected: widget.currentRoute == 'activity_log',
-                  onTap: () => _navigate(context, const ActivityLogScreen()),
-                ),
-                _DrawerTile(
-                  icon: Icons.pie_chart_rounded,
-                  title: 'Budget Spending Breakdown',
-                  isSelected: widget.currentRoute == 'budget_breakdown',
-                  onTap: () {
-                    if (widget.onShowBudgetBreakdown != null) {
-                      Navigator.pop(context);
-                      widget.onShowBudgetBreakdown!();
-                    } else {
-                      _navigate(context, const FounderDashboardScreen(showBreakdownOnLoad: true));
-                    }
-                  },
-                ),
-                const Divider(),
-                _DrawerTile(
-                  icon: Icons.person_rounded,
-                  title: 'Profile Settings',
-                  isSelected: widget.currentRoute == 'profile',
-                  onTap: () => _navigate(context, const ProfileScreen()),
-                ),
-              ],
+            child: Builder(
+              builder: (context) {
+                final roleStr = (_user?.role ?? '').toUpperCase();
+                final isAdminOrFounder = _user?.isAdmin == true || roleStr == 'ADMIN' || roleStr == 'FOUNDER';
+                final isManager = roleStr == 'MANAGER';
+                final isAuditor = roleStr == 'FINANCE';
+
+                return ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    if (isAdminOrFounder || isManager || isAuditor)
+                      _DrawerTile(
+                        icon: Icons.dashboard_rounded,
+                        title: 'Founder Dashboard',
+                        isSelected: widget.currentRoute == 'dashboard',
+                        onTap: () => _navigate(context, const FounderDashboardScreen()),
+                      )
+                    else
+                      _DrawerTile(
+                        icon: Icons.dashboard_rounded,
+                        title: 'My Dashboard',
+                        isSelected: widget.currentRoute == 'employee_dashboard',
+                        onTap: () => _navigate(context, const EmployeeDashboardScreen()),
+                      ),
+                    if (isAdminOrFounder) ...[
+                      _DrawerTile(
+                        icon: Icons.people_alt_rounded,
+                        title: 'Manage Users & Teams',
+                        isSelected: widget.currentRoute == 'users',
+                        onTap: () => _navigate(context, const UsersScreen()),
+                      ),
+                      _DrawerTile(
+                        icon: Icons.admin_panel_settings_rounded,
+                        title: 'Roles & Permissions',
+                        isSelected: widget.currentRoute == 'roles',
+                        onTap: () => _navigate(context, const RolesScreen()),
+                      ),
+                    ],
+                    if (isAdminOrFounder || isManager)
+                      _DrawerTile(
+                        icon: Icons.account_balance_wallet_rounded,
+                        title: 'Allocate Employee Budget',
+                        isSelected: widget.currentRoute == 'allocate_budget',
+                        onTap: () => _navigate(context, const AllocateBudgetScreen()),
+                      ),
+                    if (isAdminOrFounder || isManager)
+                      _DrawerTile(
+                        icon: Icons.fact_check_rounded,
+                        title: 'Approval Requests',
+                        isSelected: widget.currentRoute == 'approvals',
+                        onTap: () => _navigate(context, const ApprovalsScreen()),
+                      ),
+                    _DrawerTile(
+                      icon: Icons.receipt_long_rounded,
+                      title: 'My Expenses',
+                      isSelected: widget.currentRoute == 'my_expenses',
+                      onTap: () => _navigate(context, const MyExpensesScreen()),
+                    ),
+                    _DrawerTile(
+                      icon: Icons.add_card_rounded,
+                      title: 'Submit Budget Request',
+                      isSelected: widget.currentRoute == 'budget_request',
+                      onTap: () => _navigate(context, const BudgetRequestScreen()),
+                    ),
+                    if (isAdminOrFounder || isManager || isAuditor)
+                      _DrawerTile(
+                        icon: Icons.bar_chart_rounded,
+                        title: 'Analytics & Financial Reports',
+                        isSelected: widget.currentRoute == 'reports',
+                        onTap: () => _navigate(context, const ReportsScreen()),
+                      ),
+                    if (isAdminOrFounder || isManager || isAuditor)
+                      _DrawerTile(
+                        icon: Icons.history_rounded,
+                        title: 'Audit & Activity Log',
+                        isSelected: widget.currentRoute == 'activity_log',
+                        onTap: () => _navigate(context, const ActivityLogScreen()),
+                      ),
+                    if (isAdminOrFounder || isManager)
+                      _DrawerTile(
+                        icon: Icons.pie_chart_rounded,
+                        title: 'Budget Spending Breakdown',
+                        isSelected: widget.currentRoute == 'budget_breakdown',
+                        onTap: () {
+                          if (widget.onShowBudgetBreakdown != null) {
+                            Navigator.pop(context);
+                            widget.onShowBudgetBreakdown!();
+                          } else {
+                            _navigate(context, const FounderDashboardScreen(showBreakdownOnLoad: true));
+                          }
+                        },
+                      ),
+                    const Divider(),
+                    _DrawerTile(
+                      icon: Icons.person_rounded,
+                      title: 'Profile Settings',
+                      isSelected: widget.currentRoute == 'profile',
+                      onTap: () => _navigate(context, const ProfileScreen()),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
           Container(

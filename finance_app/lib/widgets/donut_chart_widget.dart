@@ -54,15 +54,15 @@ class DonutChartWidget extends StatelessWidget {
       children: [
         // Donut Chart Container
         SizedBox(
-          height: 150,
-          width: 150,
+          height: 130,
+          width: 130,
           child: Stack(
             alignment: Alignment.center,
             children: [
               PieChart(
                 PieChartData(
-                  sectionsSpace: 3,
-                  centerSpaceRadius: 46,
+                  sectionsSpace: 2,
+                  centerSpaceRadius: 38,
                   startDegreeOffset: 270,
                   sections: categories.map((cat) {
                     final catColor = cat['color'] as Color;
@@ -70,7 +70,7 @@ class DonutChartWidget extends StatelessWidget {
                       color: catColor,
                       value: (cat['pct'] as num).toDouble(),
                       title: '',
-                      radius: 22,
+                      radius: 20,
                     );
                   }).toList(),
                 ),
@@ -78,19 +78,22 @@ class DonutChartWidget extends StatelessWidget {
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    _formatCurrency(totalExpenses),
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF111827),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      _formatCurrency(totalExpenses),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF111827),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     'Total Expenses',
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: 9,
                       fontWeight: FontWeight.w500,
                       color: Colors.grey.shade600,
                     ),
@@ -100,7 +103,7 @@ class DonutChartWidget extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(width: 24),
+        const SizedBox(width: 10),
 
         // Legend List with Exact Matching Colors
         Expanded(
@@ -109,35 +112,34 @@ class DonutChartWidget extends StatelessWidget {
             children: categories.map((cat) {
               final catColor = cat['color'] as Color;
               return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
+                padding: const EdgeInsets.symmetric(vertical: 3),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 10,
-                          height: 10,
-                          decoration: BoxDecoration(
-                            color: catColor,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          cat['name'] as String,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF374151),
-                          ),
-                        ),
-                      ],
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: catColor,
+                        shape: BoxShape.circle,
+                      ),
                     ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        cat['name'] as String,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF374151),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
                     Text(
                       '${cat['pct']}%',
                       style: const TextStyle(
-                        fontSize: 13,
+                        fontSize: 12,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF111827),
                       ),

@@ -87,7 +87,7 @@ class _BudgetRequestScreenState extends State<BudgetRequestScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final allocated = _currentUser?.allocatedAmount ?? 25000.0;
+    final allocated = _currentUser?.allocatedAmount ?? 0.0;
     final reqAmount = double.tryParse(_amountController.text) ?? 0.0;
     final newBudgetAfterApproval = allocated + reqAmount;
 
@@ -142,9 +142,10 @@ class _BudgetRequestScreenState extends State<BudgetRequestScreen> {
 
                 return DropdownButtonFormField<int>(
                   value: effVal,
+                  isExpanded: true,
                   decoration: const InputDecoration(border: OutlineInputBorder()),
                   items: categoryList
-                      .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
+                      .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, overflow: TextOverflow.ellipsis)))
                       .toList(),
                   onChanged: (val) => setState(() => _selectedCategoryId = val),
                 );
@@ -244,10 +245,14 @@ class _BudgetRequestScreenState extends State<BudgetRequestScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                req.categoryName,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1F2937)),
+                              Expanded(
+                                child: Text(
+                                  req.categoryName,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1F2937)),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
+                              const SizedBox(width: 8),
                               StatusBadge(status: req.status),
                             ],
                           ),
@@ -255,9 +260,12 @@ class _BudgetRequestScreenState extends State<BudgetRequestScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                req.createdAt,
-                                style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                              Expanded(
+                                child: Text(
+                                  req.formattedDate,
+                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                               Text(
                                 '₹${req.requestAmount.toStringAsFixed(0)}',

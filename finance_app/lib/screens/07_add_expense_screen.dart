@@ -32,15 +32,19 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   final ImagePicker _imagePicker = ImagePicker();
 
   final List<CategoryModel> _fallbackCategories = [
-    CategoryModel(id: 1, name: 'Software Tools', type: 'EXPENSE', icon: 'computer', color: '#8B5CF6'),
-    CategoryModel(id: 2, name: 'AI Subscriptions', type: 'EXPENSE', icon: 'psychology', color: '#EC4899'),
-    CategoryModel(id: 3, name: 'Purchase of Domain or Server', type: 'EXPENSE', icon: 'dns', color: '#2563EB'),
-    CategoryModel(id: 4, name: 'Cloud Infrastructure & Hosting', type: 'EXPENSE', icon: 'cloud', color: '#0EA5E9'),
-    CategoryModel(id: 5, name: 'API & Third-Party Services', type: 'EXPENSE', icon: 'api', color: '#10B981'),
-    CategoryModel(id: 6, name: 'Hardware & Dev Peripherals', type: 'EXPENSE', icon: 'devices', color: '#6366F1'),
-    CategoryModel(id: 7, name: 'Travel & Client Visits', type: 'EXPENSE', icon: 'directions_car', color: '#F59E0B'),
-    CategoryModel(id: 8, name: 'Office Supplies & Utilities', type: 'EXPENSE', icon: 'shopping_bag', color: '#64748B'),
-    CategoryModel(id: 9, name: 'Others', type: 'EXPENSE', icon: 'more_horiz', color: '#9CA3AF'),
+    CategoryModel(id: 1, name: 'Software & SaaS Subscriptions', type: 'EXPENSE', icon: 'computer', color: '#8B5CF6'),
+    CategoryModel(id: 2, name: 'Cloud Hosting & Infrastructure (AWS/Azure/GCP)', type: 'EXPENSE', icon: 'cloud', color: '#0EA5E9'),
+    CategoryModel(id: 3, name: 'AI Tools & API Subscriptions (OpenAI/Claude)', type: 'EXPENSE', icon: 'psychology', color: '#EC4899'),
+    CategoryModel(id: 4, name: 'Purchase of Domain or SSL Certificates', type: 'EXPENSE', icon: 'dns', color: '#2563EB'),
+    CategoryModel(id: 5, name: 'Hardware & Dev Peripherals (Laptops/Monitors)', type: 'EXPENSE', icon: 'devices', color: '#6366F1'),
+    CategoryModel(id: 6, name: 'Cybersecurity & Antivirus Software', type: 'EXPENSE', icon: 'security', color: '#EF4444'),
+    CategoryModel(id: 7, name: 'DevOps & CI/CD Tools (GitHub/Docker)', type: 'EXPENSE', icon: 'integration_instructions', color: '#10B981'),
+    CategoryModel(id: 8, name: 'IT Consultancy & Technical Services', type: 'EXPENSE', icon: 'engineering', color: '#F59E0B'),
+    CategoryModel(id: 9, name: 'Network & High-Speed Internet', type: 'EXPENSE', icon: 'wifi', color: '#14B8A6'),
+    CategoryModel(id: 10, name: 'Office Supplies & Tech Utilities', type: 'EXPENSE', icon: 'shopping_bag', color: '#64748B'),
+    CategoryModel(id: 11, name: 'Travel & Client On-site Visits', type: 'EXPENSE', icon: 'directions_car', color: '#D97706'),
+    CategoryModel(id: 12, name: 'Meals & Team Offsites', type: 'EXPENSE', icon: 'restaurant', color: '#F43F5E'),
+    CategoryModel(id: 13, name: 'Others', type: 'EXPENSE', icon: 'more_horiz', color: '#9CA3AF'),
   ];
 
   @override
@@ -137,18 +141,34 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Upload Bill / Receipt',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(ctx),
-                    ),
-                  ],
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Attach Receipt / Voucher',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Choose how to add your receipt proof',
+                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Row(
@@ -378,6 +398,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               const SizedBox(height: 6),
               DropdownButtonFormField<int>(
                 value: effectiveSelectedId,
+                isExpanded: true,
                 decoration: InputDecoration(
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   focusedBorder: OutlineInputBorder(
@@ -406,7 +427,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
-                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
                             isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
@@ -414,12 +434,15 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                             size: 18,
                           ),
                           const SizedBox(width: 8),
-                          Text(
-                            c.name,
-                            style: TextStyle(
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                              color: isSelected ? AppColors.primary : const Color(0xFF374151),
-                              fontSize: 13,
+                          Expanded(
+                            child: Text(
+                              c.name,
+                              style: TextStyle(
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                color: isSelected ? AppColors.primary : const Color(0xFF374151),
+                                fontSize: 13,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],

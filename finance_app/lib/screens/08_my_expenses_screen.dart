@@ -38,6 +38,37 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
     _loadExpenses();
   }
 
+  DateTimeRange? _customDateRange;
+
+  Future<void> _selectCustomDateRange() async {
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+      initialDateRange: _customDateRange ?? DateTimeRange(
+        start: DateTime.now().subtract(const Duration(days: 7)),
+        end: DateTime.now(),
+      ),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppColors.primary,
+              onPrimary: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        _customDateRange = picked;
+        _selectedFilter = 'Custom';
+      });
+    }
+  }
+
   Future<void> _loadExpenses() async {
     final currentUser = await ApiService.getCurrentUser();
     final role = await AuthService.getUserRole();
@@ -368,6 +399,37 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
   Widget build(BuildContext context) {
     var rawList = List<ExpenseModel>.from(_expenses);
 
+    DateTime? parseDate(String s) {
+      if (s.isEmpty) return null;
+      return DateTime.tryParse(s);
+    }
+
+    final now = DateTime.now();
+
+    if (_selectedFilter == 'This Month') {
+      rawList = rawList.where((e) {
+        final dt = parseDate(e.dateTime);
+        if (dt == null) return true;
+        return dt.year == now.year && dt.month == now.month;
+      }).toList();
+    } else if (_selectedFilter == 'This Week') {
+      final startOfWeek = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+      final endOfWeek = startOfWeek.add(const Duration(days: 7));
+      rawList = rawList.where((e) {
+        final dt = parseDate(e.dateTime);
+        if (dt == null) return true;
+        return dt.isAfter(startOfWeek.subtract(const Duration(seconds: 1))) && dt.isBefore(endOfWeek);
+      }).toList();
+    } else if (_selectedFilter == 'Custom' && _customDateRange != null) {
+      final startOfDay = DateTime(_customDateRange!.start.year, _customDateRange!.start.month, _customDateRange!.start.day);
+      final endOfDay = DateTime(_customDateRange!.end.year, _customDateRange!.end.month, _customDateRange!.end.day, 23, 59, 59);
+      rawList = rawList.where((e) {
+        final dt = parseDate(e.dateTime);
+        if (dt == null) return true;
+        return dt.isAfter(startOfDay.subtract(const Duration(seconds: 1))) && dt.isBefore(endOfDay);
+      }).toList();
+    }
+
     if (_categoryFilter != 'All') {
       rawList = rawList.where((e) => e.categoryName.toLowerCase().contains(_categoryFilter.toLowerCase())).toList();
     }
@@ -440,8 +502,20 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
                 child: Row(
                   children: filters.map((f) {
                     final isSelected = _selectedFilter == f;
+                    String labelText = f;
+                    if (f == 'Custom' && _customDateRange != null) {
+                      final startStr = DateFormat('dd MMM').format(_customDateRange!.start);
+                      final endStr = DateFormat('dd MMM').format(_customDateRange!.end);
+                      labelText = 'Custom ($startStr - $endStr)';
+                    }
                     return GestureDetector(
-                      onTap: () => setState(() => _selectedFilter = f),
+                      onTap: () async {
+                        if (f == 'Custom') {
+                          await _selectCustomDateRange();
+                        } else {
+                          setState(() => _selectedFilter = f);
+                        }
+                      },
                       child: Container(
                         margin: const EdgeInsets.only(right: 8),
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -450,7 +524,7 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
-                          f,
+                          labelText,
                           style: TextStyle(
                             color: isSelected ? Colors.white : Colors.grey.shade700,
                             fontSize: 12,
@@ -558,11 +632,19 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
                                       Row(
                                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
-                                          Text(exp.dateTime, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                                          Expanded(
+                                            child: Text(
+                                              exp.formattedDate,
+                                              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
                                           Row(
+                                            mainAxisSize: MainAxisSize.min,
                                             children: [
                                               StatusBadge(status: exp.status),
-                                              const SizedBox(width: 8),
+                                              const SizedBox(width: 4),
                                               IconButton(
                                                 icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
                                                 onPressed: () => _showEditExpenseSheet(context, exp),
@@ -740,7 +822,9 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
-                                isOver ? '🚨 OVER BUDGET' : '$pct% of expenses',
+                                isOver
+                                    ? 'Over Budget by ₹${(spent - u.allocatedAmount).clamp(0.0, double.infinity).toStringAsFixed(0)}'
+                                    : '$pct% of expenses',
                                 style: TextStyle(
                                   fontSize: 9,
                                   fontWeight: FontWeight.bold,
@@ -795,23 +879,26 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Expense Breakdown by User',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF1F2937),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Expense Breakdown by User',
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1F2937),
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Who spent the total expenses amount & their claims',
-                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                            ),
-                          ],
+                              const SizedBox(height: 2),
+                              Text(
+                                'Who spent the total expenses amount & their claims',
+                                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
                         ),
                         IconButton(
                           icon: const Icon(Icons.close),
@@ -928,7 +1015,8 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
                               ),
                             ),
 
-                            Padding(
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
                               padding: const EdgeInsets.symmetric(horizontal: 20),
                               child: Row(
                                 children: ['All', 'Spenders', 'Over Budget'].map((mode) {
@@ -982,6 +1070,8 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
                                           color: isOver ? const Color(0xFFFFF1F2).withOpacity(0.5) : Colors.grey.shade50,
                                           child: ExpansionTile(
                                             shape: const Border(),
+                                            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                            childrenPadding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
                                             leading: CircleAvatar(
                                               backgroundColor: isOver ? const Color(0xFFFEF2F2) : AppColors.primaryLight,
                                               child: Text(
@@ -995,46 +1085,95 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
                                             title: Row(
                                               children: [
                                                 Expanded(
-                                                  child: Text(
-                                                    u.fullName,
-                                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(
+                                                        u.fullName,
+                                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1F2937)),
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                      Text(
+                                                        '${u.department} • ${uExpenses.length} Claims',
+                                                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                    ],
                                                   ),
                                                 ),
-                                                Text(
-                                                  '₹${spent.toStringAsFixed(0)}',
-                                                  style: const TextStyle(
-                                                    fontWeight: FontWeight.w800,
-                                                    fontSize: 15,
-                                                    color: Color(0xFFFF5500),
-                                                  ),
+                                                const SizedBox(width: 8),
+                                                Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                                  children: [
+                                                    Text(
+                                                      '₹${spent.toStringAsFixed(0)}',
+                                                      style: const TextStyle(
+                                                        fontWeight: FontWeight.w800,
+                                                        fontSize: 14,
+                                                        color: Color(0xFFFF5500),
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      isOver ? 'Over Budget' : '$pct% of expenses',
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: isOver ? const Color(0xFFEF4444) : AppColors.primary,
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
                                               ],
                                             ),
-                                            subtitle: Row(
-                                              children: [
-                                                Text(
-                                                  '${u.department} • ${uExpenses.length} Claims',
-                                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                                                ),
-                                                const Spacer(),
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                  decoration: BoxDecoration(
-                                                    color: isOver ? const Color(0xFFFEF2F2) : AppColors.primaryLight,
-                                                    borderRadius: BorderRadius.circular(6),
+                                            subtitle: Padding(
+                                              padding: const EdgeInsets.only(top: 4),
+                                              child: Row(
+                                                children: [
+                                                  Icon(
+                                                    isOver ? Icons.warning_amber_rounded : Icons.account_balance_wallet_outlined,
+                                                    size: 13,
+                                                    color: isOver ? Colors.redAccent : AppColors.approvedGreen,
                                                   ),
-                                                  child: Text(
-                                                    isOver ? '🚨 OVER BUDGET' : '$pct% of expenses',
-                                                    style: TextStyle(
-                                                      fontSize: 9,
-                                                      fontWeight: FontWeight.bold,
-                                                      color: isOver ? const Color(0xFFEF4444) : AppColors.primary,
+                                                  const SizedBox(width: 4),
+                                                  Expanded(
+                                                    child: Text(
+                                                      isOver
+                                                          ? 'Over Budget by ₹${(spent - u.allocatedAmount).clamp(0.0, double.infinity).toStringAsFixed(0)}'
+                                                          : 'Available: ₹${u.remainingAmount.clamp(0.0, double.infinity).toStringAsFixed(0)} (Budget: ₹${u.allocatedAmount.toStringAsFixed(0)})',
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        fontWeight: FontWeight.w600,
+                                                        color: isOver ? Colors.redAccent : AppColors.approvedGreen,
+                                                      ),
+                                                      overflow: TextOverflow.ellipsis,
                                                     ),
                                                   ),
-                                                ),
-                                              ],
+                                                ],
+                                              ),
                                             ),
                                             children: [
+                                               if (isOver)
+                                                 Container(
+                                                   margin: const EdgeInsets.only(left: 16, right: 16, top: 4, bottom: 8),
+                                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                   decoration: BoxDecoration(
+                                                     color: const Color(0xFFFEF2F2),
+                                                     borderRadius: BorderRadius.circular(8),
+                                                     border: Border.all(color: const Color(0xFFFCA5A5)),
+                                                   ),
+                                                   child: Row(
+                                                     children: [
+                                                       const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 18),
+                                                       const SizedBox(width: 8),
+                                                       Expanded(
+                                                         child: Text(
+                                                           'Spent ₹${spent.toStringAsFixed(0)} against ₹${u.allocatedAmount.toStringAsFixed(0)} budget (Over budget by ₹${(spent - u.allocatedAmount).clamp(0.0, double.infinity).toStringAsFixed(0)})',
+                                                           style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF991B1B)),
+                                                         ),
+                                                       ),
+                                                     ],
+                                                   ),
+                                                 ),
                                               if (uExpenses.isEmpty)
                                                 Padding(
                                                   padding: const EdgeInsets.all(12.0),
