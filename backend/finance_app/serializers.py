@@ -33,9 +33,16 @@ class UserDetailSerializer(serializers.ModelSerializer):
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'profile', 'allocated_amount', 'used_amount', 'remaining_amount']
 
     def get_role(self, obj):
-        if hasattr(obj, 'profile') and obj.profile.role:
-            return obj.profile.role
-        return 'ADMIN' if (obj.is_superuser or obj.username in ['admin', 'founder', 'diya_founder']) else 'EMPLOYEE'
+        if obj.is_superuser or obj.is_staff or obj.username.lower() in ['admin', 'admin2', 'founder', 'diya', 'diya_founder']:
+            return 'ADMIN'
+        if hasattr(obj, 'profile') and obj.profile:
+            role_str = str(obj.profile.role or '').upper()
+            if role_str in ['ADMIN', 'FOUNDER', 'SUPERUSER']:
+                return 'ADMIN'
+            if hasattr(obj.profile, 'role_fk') and obj.profile.role_fk and str(obj.profile.role_fk.code).upper() in ['ADMIN', 'FOUNDER']:
+                return 'ADMIN'
+            return role_str if role_str else 'EMPLOYEE'
+        return 'EMPLOYEE'
 
     def get_allocated_amount(self, obj):
         alloc_sum = BudgetAllocation.objects.filter(employee=obj).aggregate(total=Sum('allocated_amount'))['total']

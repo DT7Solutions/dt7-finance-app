@@ -39,7 +39,7 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
   List<BudgetRequestModel> _allBudgetRequests = [];
   UserModel? _currentUser;
   String? _profilePhotoUrl;
-  bool _isLoading = false;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -275,20 +275,32 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
   }
 
   Future<void> _loadDashboard() async {
-    final data = await ApiService.getFounderDashboard();
-    final expenses = await ApiService.getExpenses();
-    final budgetRequests = await ApiService.getBudgetRequests();
-    final user = await ApiService.getCurrentUser();
-    final photo = await AuthService.getProfilePhoto();
-    if (mounted) {
-      setState(() {
-        _currentUser = user;
-        _profilePhotoUrl = photo;
-        _dashboardData = data;
-        _allExpenses = expenses;
-        _allBudgetRequests = budgetRequests;
-        _isLoading = false;
-      });
+    try {
+      final results = await Future.wait([
+        ApiService.getFounderDashboard(),
+        ApiService.getExpenses(),
+        ApiService.getBudgetRequests(),
+        ApiService.getCurrentUser(),
+        AuthService.getProfilePhoto(),
+      ]);
+
+      if (mounted) {
+        setState(() {
+          _dashboardData = results[0] as Map<String, dynamic>?;
+          _allExpenses = (results[1] as List<ExpenseModel>?) ?? [];
+          _allBudgetRequests = (results[2] as List<BudgetRequestModel>?) ?? [];
+          _currentUser = results[3] as UserModel?;
+          _profilePhotoUrl = results[4] as String?;
+        });
+      }
+    } catch (e, stack) {
+      debugPrint('Error in _loadDashboard: $e\n$stack');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -505,7 +517,7 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          '₹${(item['amount'] as double).toStringAsFixed(0)}',
+                          '₹${((item['amount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(0)}',
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1F2937)),
                         ),
                       ],
@@ -812,23 +824,26 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Budget Spending Breakdown',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF1F2937),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Budget Spending Breakdown',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1F2937),
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Who spent the budget & who spent over budget',
-                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                            ),
-                          ],
+                              const SizedBox(height: 2),
+                              Text(
+                                'Who spent the budget & who spent over budget',
+                                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
                         ),
                         IconButton(
                           icon: const Icon(Icons.close),
@@ -842,10 +857,7 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                     child: FutureBuilder<List<UserModel>>(
                       future: ApiService.getUsers(),
                       builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
-                        }
-                        final users = snapshot.data ?? [];
+                        final users = (snapshot.data != null && snapshot.data!.isNotEmpty) ? snapshot.data! : ApiService.storedUsers;
                         final overBudgetUsers = users.where((u) => (u.usedAmount > u.allocatedAmount || u.remainingAmount < 0) && u.allocatedAmount > 0).toList();
                         final displayUsers = filterMode == 'OverBudget' ? overBudgetUsers : users;
 
@@ -853,33 +865,36 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                           children: [
                             Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                              child: Row(
-                                children: [
-                                  ChoiceChip(
-                                    label: Text('All Users (${users.length})'),
-                                    selected: filterMode == 'All',
-                                    selectedColor: AppColors.primaryLight,
-                                    labelStyle: TextStyle(
-                                      color: filterMode == 'All' ? AppColors.primary : Colors.black87,
-                                      fontWeight: filterMode == 'All' ? FontWeight.bold : FontWeight.normal,
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  children: [
+                                    ChoiceChip(
+                                      label: Text('All Users (${users.length})'),
+                                      selected: filterMode == 'All',
+                                      selectedColor: AppColors.primaryLight,
+                                      labelStyle: TextStyle(
+                                        color: filterMode == 'All' ? AppColors.primary : Colors.black87,
+                                        fontWeight: filterMode == 'All' ? FontWeight.bold : FontWeight.normal,
+                                      ),
+                                      onSelected: (_) => setModalState(() => filterMode = 'All'),
                                     ),
-                                    onSelected: (_) => setModalState(() => filterMode = 'All'),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  ChoiceChip(
-                                    label: Text('Over Budget (${overBudgetUsers.length})'),
-                                    selected: filterMode == 'OverBudget',
-                                    selectedColor: const Color(0xFFFEF2F2),
-                                    labelStyle: TextStyle(
-                                      color: filterMode == 'OverBudget' ? const Color(0xFFEF4444) : Colors.black87,
-                                      fontWeight: filterMode == 'OverBudget' ? FontWeight.bold : FontWeight.normal,
+                                    const SizedBox(width: 10),
+                                    ChoiceChip(
+                                      label: Text('Over Budget (${overBudgetUsers.length})'),
+                                      selected: filterMode == 'OverBudget',
+                                      selectedColor: const Color(0xFFFEF2F2),
+                                      labelStyle: TextStyle(
+                                        color: filterMode == 'OverBudget' ? const Color(0xFFEF4444) : Colors.black87,
+                                        fontWeight: filterMode == 'OverBudget' ? FontWeight.bold : FontWeight.normal,
+                                      ),
+                                      avatar: overBudgetUsers.isNotEmpty
+                                          ? const Icon(Icons.warning_amber_rounded, size: 16, color: Color(0xFFEF4444))
+                                          : null,
+                                      onSelected: (_) => setModalState(() => filterMode = 'OverBudget'),
                                     ),
-                                    avatar: overBudgetUsers.isNotEmpty
-                                        ? const Icon(Icons.warning_amber_rounded, size: 16, color: Color(0xFFEF4444))
-                                        : null,
-                                    onSelected: (_) => setModalState(() => filterMode = 'OverBudget'),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                             Expanded(
@@ -938,55 +953,62 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                                                 Row(
                                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                                   children: [
-                                                    Row(
-                                                      children: [
-                                                        CircleAvatar(
-                                                          radius: 20,
-                                                          backgroundColor: isOver ? const Color(0xFFFEF2F2) : AppColors.primaryLight,
-                                                          child: Text(
-                                                            u.fullName.isNotEmpty ? u.fullName[0].toUpperCase() : 'U',
-                                                            style: TextStyle(
-                                                              fontWeight: FontWeight.bold,
-                                                              color: isOver ? const Color(0xFFEF4444) : AppColors.primary,
+                                                    Expanded(
+                                                      child: Row(
+                                                        children: [
+                                                          CircleAvatar(
+                                                            radius: 20,
+                                                            backgroundColor: isOver ? const Color(0xFFFEF2F2) : AppColors.primaryLight,
+                                                            child: Text(
+                                                              u.fullName.isNotEmpty ? u.fullName[0].toUpperCase() : 'U',
+                                                              style: TextStyle(
+                                                                fontWeight: FontWeight.bold,
+                                                                color: isOver ? const Color(0xFFEF4444) : AppColors.primary,
+                                                              ),
                                                             ),
                                                           ),
-                                                        ),
-                                                        const SizedBox(width: 12),
-                                                        Column(
-                                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                                          children: [
-                                                            Text(
-                                                              u.fullName,
-                                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1F2937)),
-                                                            ),
-                                                            Row(
+                                                          const SizedBox(width: 12),
+                                                          Expanded(
+                                                            child: Column(
+                                                              crossAxisAlignment: CrossAxisAlignment.start,
                                                               children: [
                                                                 Text(
-                                                                  '${u.department} • ${u.employeeId}',
-                                                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                                                  u.fullName,
+                                                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1F2937)),
+                                                                  overflow: TextOverflow.ellipsis,
                                                                 ),
-                                                                const SizedBox(width: 8),
-                                                                Text(
-                                                                  'Budget: ₹${u.allocatedAmount.toStringAsFixed(0)}',
-                                                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                                                                ),
-                                                                const SizedBox(width: 8),
-                                                                Text(
-                                                                  isOver ? 'Available: -₹${(u.usedAmount - u.allocatedAmount).clamp(0.0, double.infinity).toStringAsFixed(0)}' : 'Available: ₹${u.remainingAmount.clamp(0.0, double.infinity).toStringAsFixed(0)}',
-                                                                  style: TextStyle(
-                                                                    fontSize: 11,
-                                                                    fontWeight: FontWeight.bold,
-                                                                    color: isOver ? Colors.redAccent : AppColors.approvedGreen,
-                                                                  ),
+                                                                const SizedBox(height: 2),
+                                                                Wrap(
+                                                                  spacing: 6,
+                                                                  runSpacing: 2,
+                                                                  children: [
+                                                                    Text(
+                                                                      '${u.department} • ${u.employeeId}',
+                                                                      style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                                                    ),
+                                                                    Text(
+                                                                      'Budget: ₹${u.allocatedAmount.toStringAsFixed(0)}',
+                                                                      style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                                                    ),
+                                                                    Text(
+                                                                      isOver ? 'Available: -₹${(u.usedAmount - u.allocatedAmount).clamp(0.0, double.infinity).toStringAsFixed(0)}' : 'Available: ₹${u.remainingAmount.clamp(0.0, double.infinity).toStringAsFixed(0)}',
+                                                                      style: TextStyle(
+                                                                        fontSize: 11,
+                                                                        fontWeight: FontWeight.bold,
+                                                                        color: isOver ? Colors.redAccent : AppColors.approvedGreen,
+                                                                      ),
+                                                                    ),
+                                                                  ],
                                                                 ),
                                                               ],
                                                             ),
-                                                          ],
-                                                        ),
-                                                      ],
+                                                          ),
+                                                        ],
+                                                      ),
                                                     ),
+                                                    const SizedBox(width: 6),
                                                     Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                                       decoration: BoxDecoration(
                                                         color: isOver ? const Color(0xFFFEF2F2) : AppColors.approvedGreen.withOpacity(0.1),
                                                         borderRadius: BorderRadius.circular(12),
@@ -1009,36 +1031,54 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                                                 Row(
                                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                                   children: [
-                                                    Column(
-                                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                                      children: [
-                                                        const Text('Allocated', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                                                        const SizedBox(height: 2),
-                                                        Text('₹${u.allocatedAmount.toStringAsFixed(0)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                                                      ],
-                                                    ),
-                                                    Column(
-                                                      crossAxisAlignment: CrossAxisAlignment.center,
-                                                      children: [
-                                                        const Text('Used Budget', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                                                        const SizedBox(height: 2),
-                                                        Text('₹${u.usedAmount.toStringAsFixed(0)}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: isOver ? const Color(0xFFEF4444) : Colors.black87)),
-                                                      ],
-                                                    ),
-                                                    Column(
-                                                      crossAxisAlignment: CrossAxisAlignment.end,
-                                                      children: [
-                                                        Text(isOver ? 'Deficit' : 'Remaining', style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                                                        const SizedBox(height: 2),
-                                                        Text(
-                                                          _formatCurrency(remainingRem),
-                                                          style: TextStyle(
-                                                            fontSize: 13,
-                                                            fontWeight: FontWeight.bold,
-                                                            color: remainingRem < 0 ? const Color(0xFFEF4444) : AppColors.approvedGreen,
+                                                    Expanded(
+                                                      child: Column(
+                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                        children: [
+                                                          const Text('Allocated', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                                                          const SizedBox(height: 2),
+                                                          FittedBox(
+                                                            fit: BoxFit.scaleDown,
+                                                            alignment: Alignment.centerLeft,
+                                                            child: Text('₹${u.allocatedAmount.toStringAsFixed(0)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                                                           ),
-                                                        ),
-                                                      ],
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    Expanded(
+                                                      child: Column(
+                                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                                        children: [
+                                                          const Text('Used Budget', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                                                          const SizedBox(height: 2),
+                                                          FittedBox(
+                                                            fit: BoxFit.scaleDown,
+                                                            alignment: Alignment.center,
+                                                            child: Text('₹${u.usedAmount.toStringAsFixed(0)}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: isOver ? const Color(0xFFEF4444) : Colors.black87)),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    Expanded(
+                                                      child: Column(
+                                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                                        children: [
+                                                          Text(isOver ? 'Deficit' : 'Remaining', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                                                          const SizedBox(height: 2),
+                                                          FittedBox(
+                                                            fit: BoxFit.scaleDown,
+                                                            alignment: Alignment.centerRight,
+                                                            child: Text(
+                                                              _formatCurrency(remainingRem),
+                                                              style: TextStyle(
+                                                                fontSize: 13,
+                                                                fontWeight: FontWeight.bold,
+                                                                color: remainingRem < 0 ? const Color(0xFFEF4444) : AppColors.approvedGreen,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
                                                     ),
                                                   ],
                                                 ),
@@ -1103,29 +1143,64 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
   }
 
   Widget _buildExpenseBreakdownByUserSection() {
+    final users = ApiService.storedUsers;
+    final allExpenses = _allExpenses;
+
+    Map<int, List<ExpenseModel>> userExpenseMap = {};
+    Map<int, double> userSpentMap = {};
+
+    for (var u in users) {
+      final uExpenses = allExpenses.where((e) {
+        final uName = u.username.trim().toLowerCase();
+        final fName = u.fullName.trim().toLowerCase();
+        final first = u.firstName.trim().toLowerCase();
+        final email = u.email.trim().toLowerCase();
+        final expUser = e.userName.trim().toLowerCase();
+
+        if (expUser.isEmpty) return false;
+        return expUser == uName || expUser == fName || expUser == email ||
+            (uName.isNotEmpty && (expUser.contains(uName) || uName.contains(expUser))) ||
+            (fName.isNotEmpty && (expUser.contains(fName) || fName.contains(expUser))) ||
+            (first.isNotEmpty && (expUser.contains(first) || first.contains(expUser)));
+      }).toList();
+
+      userExpenseMap[u.id] = uExpenses;
+      final sum = uExpenses.fold(0.0, (s, e) => s + e.amount);
+      userSpentMap[u.id] = sum > 0 ? sum : u.usedAmount;
+    }
+
+    final totalExpensesSum = userSpentMap.values.fold(0.0, (s, a) => s + a);
+    final spenders = users.where((u) => (userSpentMap[u.id] ?? 0) > 0).toList();
+    spenders.sort((a, b) => (userSpentMap[b.id] ?? 0).compareTo(userSpentMap[a.id] ?? 0));
+
+    final displayUsers = spenders.isNotEmpty ? spenders.take(3).toList() : users.take(3).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Expense Breakdown by User',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1F2937),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Expense Breakdown by User',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1F2937),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Who spent the total expenses amount',
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                ),
-              ],
+                  const SizedBox(height: 2),
+                  Text(
+                    'Who spent the total expenses amount',
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
             ),
             TextButton(
               onPressed: () => _showExpenseBreakdownModal(context),
@@ -1141,93 +1216,47 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
           ],
         ),
         const SizedBox(height: 8),
-        FutureBuilder<List<dynamic>>(
-          future: Future.wait([
-            ApiService.getUsers(),
-            ApiService.getExpenses(),
-          ]),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: CircularProgressIndicator(color: AppColors.primary),
-                ),
-              );
-            }
-            final users = (snapshot.data?[0] as List<UserModel>?) ?? [];
-            final allExpenses = (snapshot.data?[1] as List<ExpenseModel>?) ?? [];
+        if (displayUsers.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: const Text('No expense spending records found.'),
+          )
+        else
+          Column(
+            children: displayUsers.map((u) {
+              final spent = userSpentMap[u.id] ?? 0.0;
+              final uExpenses = userExpenseMap[u.id] ?? [];
+              final pct = totalExpensesSum > 0 ? ((spent / totalExpensesSum) * 100).toStringAsFixed(0) : '0';
+              final isOver = (spent > u.allocatedAmount || u.remainingAmount < 0) && u.allocatedAmount > 0;
 
-            Map<int, List<ExpenseModel>> userExpenseMap = {};
-            Map<int, double> userSpentMap = {};
-
-            for (var u in users) {
-              final uExpenses = allExpenses.where((e) {
-                final uName = u.username.trim().toLowerCase();
-                final fName = u.fullName.trim().toLowerCase();
-                final first = u.firstName.trim().toLowerCase();
-                final email = u.email.trim().toLowerCase();
-                final expUser = e.userName.trim().toLowerCase();
-
-                if (expUser.isEmpty) return false;
-                return expUser == uName || expUser == fName || expUser == email ||
-                    (uName.isNotEmpty && (expUser.contains(uName) || uName.contains(expUser))) ||
-                    (fName.isNotEmpty && (expUser.contains(fName) || fName.contains(expUser))) ||
-                    (first.isNotEmpty && (expUser.contains(first) || first.contains(expUser)));
-              }).toList();
-
-              userExpenseMap[u.id] = uExpenses;
-              final sum = uExpenses.fold(0.0, (s, e) => s + e.amount);
-              userSpentMap[u.id] = sum > 0 ? sum : u.usedAmount;
-            }
-
-            final totalExpensesSum = userSpentMap.values.fold(0.0, (s, a) => s + a);
-            final spenders = users.where((u) => (userSpentMap[u.id] ?? 0) > 0).toList();
-            spenders.sort((a, b) => (userSpentMap[b.id] ?? 0).compareTo(userSpentMap[a.id] ?? 0));
-
-            final displayUsers = spenders.isNotEmpty ? spenders.take(3).toList() : users.take(3).toList();
-
-            if (displayUsers.isEmpty) {
-              return Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: const Text('No expense spending records found.'),
-              );
-            }
-
-            return Column(
-              children: displayUsers.map((u) {
-                final spent = userSpentMap[u.id] ?? 0.0;
-                final uExpenses = userExpenseMap[u.id] ?? [];
-                final pct = totalExpensesSum > 0 ? ((spent / totalExpensesSum) * 100).toStringAsFixed(0) : '0';
-                final isOver = (spent > u.allocatedAmount || u.remainingAmount < 0) && u.allocatedAmount > 0;
-
-                return InkWell(
-                  onTap: () => _showExpenseBreakdownModal(context),
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: isOver ? const Color(0xFFFFF1F2).withOpacity(0.5) : Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isOver ? const Color(0xFFFCA5A5) : Colors.grey.shade200,
-                        width: isOver ? 1.5 : 1.0,
-                      ),
-                      boxShadow: const [
-                        BoxShadow(color: Color(0x06000000), blurRadius: 4, offset: Offset(0, 2)),
-                      ],
+              return InkWell(
+                onTap: () => _showExpenseBreakdownModal(context),
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: isOver ? const Color(0xFFFFF1F2).withOpacity(0.5) : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isOver ? const Color(0xFFFCA5A5) : Colors.grey.shade200,
+                      width: isOver ? 1.5 : 1.0,
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
+                    boxShadow: const [
+                      BoxShadow(color: Color(0x06000000), blurRadius: 4, offset: Offset(0, 2)),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Row(
                           children: [
                             CircleAvatar(
                               radius: 20,
@@ -1241,62 +1270,103 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                               ),
                             ),
                             const SizedBox(width: 12),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  u.fullName,
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1F2937)),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  '${u.department} • ${uExpenses.length} Claims',
-                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '₹${spent.toStringAsFixed(0)}',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFFFF5500)),
-                            ),
-                            const SizedBox(height: 2),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: isOver ? const Color(0xFFFEF2F2) : AppColors.primaryLight,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                isOver
-                                    ? 'Over Budget by ₹${(spent - u.allocatedAmount).clamp(0.0, double.infinity).toStringAsFixed(0)}'
-                                    : '$pct% of expenses',
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold,
-                                  color: isOver ? const Color(0xFFEF4444) : AppColors.primary,
-                                ),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    u.fullName,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1F2937)),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${u.department} • ${uExpenses.length} Claims',
+                                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '₹${spent.toStringAsFixed(0)}',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFFFF5500)),
+                          ),
+                          const SizedBox(height: 2),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: isOver ? const Color(0xFFFEF2F2) : AppColors.primaryLight,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              isOver
+                                  ? 'Over Budget by ₹${(spent - u.allocatedAmount).clamp(0.0, double.infinity).toStringAsFixed(0)}'
+                                  : '$pct% of expenses',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: isOver ? const Color(0xFFEF4444) : AppColors.primary,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                );
-              }).toList(),
-            );
-          },
-        ),
+                ),
+              );
+            }).toList(),
+          ),
       ],
     );
   }
 
   List<Map<String, dynamic>> _calculateCategoryBreakdown(List<ExpenseModel> expenses) {
+    if (_dashboardData != null && _dashboardData!['category_breakdown'] is List && (_dashboardData!['category_breakdown'] as List).isNotEmpty) {
+      final List rawList = _dashboardData!['category_breakdown'];
+      final colors = [
+        const Color(0xFFFF5500),
+        const Color(0xFF2563EB),
+        const Color(0xFF10B981),
+        const Color(0xFFF59E0B),
+        const Color(0xFF8B5CF6),
+        const Color(0xFFEC4899),
+        const Color(0xFF06B6D4),
+        const Color(0xFF64748B),
+      ];
+      int colorIdx = 0;
+      return rawList.map((item) {
+        final name = (item['category'] ?? item['name'] ?? 'General').toString();
+        final pct = (num.tryParse((item['percentage'] ?? item['pct'])?.toString() ?? '') ?? 0).toInt();
+        final colorVal = item['color'];
+        Color c;
+        if (colorVal is Color) {
+          c = colorVal;
+        } else if (colorVal is String && colorVal.startsWith('#')) {
+          final hex = colorVal.replaceAll('#', '');
+          c = Color(int.parse('FF$hex', radix: 16));
+        } else {
+          c = colors[colorIdx % colors.length];
+        }
+        colorIdx++;
+        return {
+          'name': name,
+          'pct': pct,
+          'color': c,
+          'amount': (num.tryParse(item['amount']?.toString() ?? '') ?? 0.0).toDouble(),
+        };
+      }).toList();
+    }
+
     if (expenses.isEmpty) {
       return [
         {'name': 'General', 'pct': 100, 'color': const Color(0xFFFF5500)},
@@ -1340,7 +1410,7 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
       colorIdx++;
     });
 
-    list.sort((a, b) => (b['amount'] as double).compareTo(a['amount'] as double));
+    list.sort((a, b) => ((b['amount'] as num?)?.toDouble() ?? 0.0).compareTo((a['amount'] as num?)?.toDouble() ?? 0.0));
     return list;
   }
 
@@ -1407,11 +1477,10 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                         ApiService.getExpenses(),
                       ]),
                       builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
-                        }
-                        final users = (snapshot.data?[0] as List<UserModel>?) ?? [];
-                        final allExpenses = (snapshot.data?[1] as List<ExpenseModel>?) ?? [];
+                        final usersList = (snapshot.data?[0] as List<UserModel>?) ?? [];
+                        final users = usersList.isNotEmpty ? usersList : ApiService.storedUsers;
+                        final expensesList = (snapshot.data?[1] as List<ExpenseModel>?) ?? [];
+                        final allExpenses = expensesList.isNotEmpty ? expensesList : _allExpenses;
 
                         Map<int, List<ExpenseModel>> userExpenseMap = {};
                         Map<int, double> userSpentMap = {};
@@ -1450,20 +1519,27 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                        'Total Expenses',
-                                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        _formatCurrency(totalExpenseAmount),
-                                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFFFF5500)),
-                                      ),
-                                    ],
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Total Expenses',
+                                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(
+                                            _formatCurrency(totalExpenseAmount),
+                                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFFFF5500)),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
+                                  const SizedBox(width: 8),
                                   Column(
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
@@ -1681,11 +1757,13 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                                                                 Text(
                                                                   exp.title,
                                                                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1F2937)),
+                                                                  overflow: TextOverflow.ellipsis,
                                                                 ),
                                                                 const SizedBox(height: 2),
                                                                 Text(
                                                                   '${exp.categoryName} • ${exp.dateTime}',
                                                                   style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                                                  overflow: TextOverflow.ellipsis,
                                                                 ),
                                                               ],
                                                             ),
@@ -1739,7 +1817,7 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
 
 
   Widget _buildFounderTab() {
-    if (_isLoading && _dashboardData == null) {
+    if (_isLoading) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(40.0),
@@ -1748,22 +1826,27 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
       );
     }
 
-    final remaining = (_dashboardData?['remaining_budget'] as double?) ?? 0.0;
-    final allocated = (_dashboardData?['total_allocated'] as double?) ?? 0.0;
-    final backendExpenses = (_dashboardData?['total_expenses'] as double?) ?? 0.0;
+    final usersList = ApiService.storedUsers;
+    final fallbackAllocated = usersList.fold(0.0, (sum, u) => sum + u.allocatedAmount);
     final activeExpensesSum = _allExpenses.where((e) => !e.isRejected).fold(0.0, (s, e) => s + e.amount);
+    final fallbackRemaining = fallbackAllocated - activeExpensesSum;
+
+    final remaining = (num.tryParse(_dashboardData?['remaining_budget']?.toString() ?? '') ?? fallbackRemaining).toDouble();
+    final allocated = (num.tryParse(_dashboardData?['total_allocated']?.toString() ?? '') ?? fallbackAllocated).toDouble();
+    final backendExpenses = (num.tryParse(_dashboardData?['total_expenses']?.toString() ?? '') ?? 0.0).toDouble();
     final expenses = backendExpenses > 0 ? backendExpenses : activeExpensesSum;
-    final users = (_dashboardData?['total_users'] as int?) ?? 0;
-    final overBudget = (_dashboardData?['over_budget'] as int?) ?? 0;
+    final users = int.tryParse(_dashboardData?['total_users']?.toString() ?? '') ?? (usersList.isNotEmpty ? usersList.length : _allExpenses.map((e) => e.userName).toSet().length);
+    final overBudget = int.tryParse(_dashboardData?['over_budget']?.toString() ?? '') ?? usersList.where((u) => u.remainingAmount < 0 && u.allocatedAmount > 0).length;
     final isNegative = remaining < 0;
     final pendingExpenses = _allExpenses.where((e) => e.isPending).toList();
 
-    return RefreshIndicator(
-      onRefresh: _loadDashboard,
-      color: AppColors.primary,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+    return SafeArea(
+      child: RefreshIndicator(
+        onRefresh: _loadDashboard,
+        color: AppColors.primary,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1817,32 +1900,30 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                'Hello, ${_currentUser?.fullName.isNotEmpty == true ? _currentUser!.fullName : (_currentUser?.firstName.isNotEmpty == true ? _currentUser!.firstName : (_currentUser?.username.isNotEmpty == true ? _currentUser!.username : "Founder"))} ',
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1F2937),
-                                ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Hello, ${_currentUser?.fullName.isNotEmpty == true ? _currentUser!.fullName : (_currentUser?.firstName.isNotEmpty == true ? _currentUser!.firstName : (_currentUser?.username.isNotEmpty == true ? _currentUser!.username : "Founder"))} 👋',
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1F2937),
                               ),
-                              const Text('👋', style: TextStyle(fontSize: 15)),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Welcome back!',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade600,
-                              fontWeight: FontWeight.w400,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 2),
+                            Text(
+                              'Welcome back!',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -1873,38 +1954,46 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Total Balance',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: isNegative ? const Color(0xFF991B1B) : Colors.grey.shade600,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Total Balance',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: isNegative ? const Color(0xFF991B1B) : Colors.grey.shade600,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        _formatCurrency(remaining),
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w900,
-                          color: isNegative ? const Color(0xFFEF4444) : const Color(0xFF111827),
-                          letterSpacing: -0.5,
+                        const SizedBox(height: 6),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            _formatCurrency(remaining),
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w900,
+                              color: isNegative ? const Color(0xFFEF4444) : const Color(0xFF111827),
+                              letterSpacing: -0.5,
+                            ),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        isNegative ? 'Remaining Budget (Deficit)' : 'Remaining Budget',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: isNegative ? const Color(0xFFDC2626) : Colors.grey.shade600,
+                        const SizedBox(height: 4),
+                        Text(
+                          isNegative ? 'Remaining Budget (Deficit)' : 'Remaining Budget',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: isNegative ? const Color(0xFFDC2626) : Colors.grey.shade600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 12),
                   Container(
                     width: 48,
                     height: 48,
@@ -2079,7 +2168,8 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
         ],
       ),
     ),
-  );
+  ),
+);
 }
 
   String get _currentRouteName {
@@ -2099,27 +2189,101 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
     }
   }
 
+  Widget _buildFounderTabSafe() {
+    try {
+      return _buildFounderTab();
+    } catch (e, stack) {
+      debugPrint('Error building founder tab: $e\n$stack');
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.red, size: 48),
+              const SizedBox(height: 12),
+              Text(
+                'Dashboard Error: $e',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: () {
+                  setState(() => _isLoading = true);
+                  _loadDashboard();
+                },
+                child: const Text('Reload Dashboard'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final screens = [
-      _buildFounderTab(),
-      UsersScreen(onBackPressed: () {
-        setState(() => _currentIndex = 0);
-        _loadDashboard();
-      }),
-      AllocateBudgetScreen(onBackPressed: () {
-        setState(() => _currentIndex = 0);
-        _loadDashboard();
-      }),
-      MyExpensesScreen(onBackPressed: () {
-        setState(() => _currentIndex = 0);
-        _loadDashboard();
-      }),
-      ReportsScreen(onBackPressed: () {
-        setState(() => _currentIndex = 0);
-        _loadDashboard();
-      }),
-    ];
+    ErrorWidget.builder = (FlutterErrorDetails details) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.warning_amber_rounded, color: Colors.deepOrange, size: 48),
+              const SizedBox(height: 12),
+              Text(
+                'Dashboard Rendering Notice:\n${details.exception}',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.deepOrange, fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: () {
+                  setState(() => _isLoading = true);
+                  _loadDashboard();
+                },
+                child: const Text('Reload Dashboard'),
+              ),
+            ],
+          ),
+        ),
+      );
+    };
+
+    Widget activeScreen;
+    switch (_currentIndex) {
+      case 0:
+        activeScreen = _buildFounderTabSafe();
+        break;
+      case 1:
+        activeScreen = UsersScreen(onBackPressed: () {
+          setState(() => _currentIndex = 0);
+          _loadDashboard();
+        });
+        break;
+      case 2:
+        activeScreen = AllocateBudgetScreen(onBackPressed: () {
+          setState(() => _currentIndex = 0);
+          _loadDashboard();
+        });
+        break;
+      case 3:
+        activeScreen = MyExpensesScreen(onBackPressed: () {
+          setState(() => _currentIndex = 0);
+          _loadDashboard();
+        });
+        break;
+      case 4:
+        activeScreen = ReportsScreen(onBackPressed: () {
+          setState(() => _currentIndex = 0);
+          _loadDashboard();
+        });
+        break;
+      default:
+        activeScreen = _buildFounderTabSafe();
+    }
 
     return PopScope(
       canPop: _currentIndex == 0,
@@ -2134,23 +2298,18 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
       child: Scaffold(
         key: _scaffoldKey,
         backgroundColor: Colors.white,
-        drawer: AppDrawer(
-          currentRoute: _currentRouteName,
-          onSelectTab: (idx) {
-            setState(() => _currentIndex = idx);
-            if (idx == 0) _loadDashboard();
-          },
-          onShowBudgetBreakdown: () => _showBudgetSpendingBreakdownModal(context),
-        ),
+        drawer: _currentIndex == 0
+            ? AppDrawer(
+                currentRoute: _currentRouteName,
+                onSelectTab: (idx) {
+                  setState(() => _currentIndex = idx);
+                  if (idx == 0) _loadDashboard();
+                },
+                onShowBudgetBreakdown: () => _showBudgetSpendingBreakdownModal(context),
+              )
+            : null,
         floatingActionButton: null,
-        body: SafeArea(
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : IndexedStack(
-                  index: _currentIndex,
-                  children: screens,
-                ),
-        ),
+        body: activeScreen,
         bottomNavigationBar: _buildCustomBottomNavBar(),
       ),
     );

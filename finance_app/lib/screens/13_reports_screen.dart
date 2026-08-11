@@ -96,7 +96,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       colorIdx++;
     });
 
-    list.sort((a, b) => (b['amount'] as double).compareTo(a['amount'] as double));
+    list.sort((a, b) => ((b['amount'] as num?)?.toDouble() ?? 0.0).compareTo((a['amount'] as num?)?.toDouble() ?? 0.0));
     return list;
   }
 
@@ -161,12 +161,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ApiService.getFounderDashboard(),
           ]),
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-            }
-
-            final users = (snapshot.data?[0] as List<UserModel>?) ?? [];
-            final allExpenses = (snapshot.data?[1] as List<ExpenseModel>?) ?? [];
+            final usersList = (snapshot.data?[0] as List<UserModel>?) ?? [];
+            final users = usersList.isNotEmpty ? usersList : ApiService.storedUsers;
+            final expensesList = (snapshot.data?[1] as List<ExpenseModel>?) ?? [];
+            final allExpenses = expensesList.isNotEmpty ? expensesList : ApiService.storedExpenses;
             final dashMap = (snapshot.data?[2] as Map<String, dynamic>?) ?? {};
 
             final periodExpenses = _filterExpensesByPeriod(allExpenses, _selectedPeriod);
@@ -418,7 +416,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                 ),
                               ),
                               Text(
-                                currencyFmt.format(emp['amount'] as double),
+                                currencyFmt.format((emp['amount'] as num?)?.toDouble() ?? 0.0),
                                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFFFF5500)),
                               ),
                             ],

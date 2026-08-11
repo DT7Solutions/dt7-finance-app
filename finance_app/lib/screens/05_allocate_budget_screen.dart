@@ -275,15 +275,19 @@ class _AllocateBudgetScreenState extends State<AllocateBudgetScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Current Allocated (${u?.fullName.isNotEmpty == true ? u!.fullName : 'Selected Employee'})',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: isNegative ? const Color(0xFF991B1B) : Colors.grey.shade700,
+              Expanded(
+                child: Text(
+                  'Current Allocated (${u?.fullName.isNotEmpty == true ? u!.fullName : 'Selected Employee'})',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: isNegative ? const Color(0xFF991B1B) : Colors.grey.shade700,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              if (isNegative)
+              if (isNegative) ...[
+                const SizedBox(width: 6),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
@@ -295,6 +299,7 @@ class _AllocateBudgetScreenState extends State<AllocateBudgetScreen> {
                     style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.redAccent),
                   ),
                 ),
+              ],
             ],
           ),
           const SizedBox(height: 6),

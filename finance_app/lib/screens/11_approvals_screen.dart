@@ -439,7 +439,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                                         style: TextStyle(fontSize: 11, color: Colors.grey.shade400),
                                       ),
                                       Text(
-                                        '₹${(item['amount'] as double).toStringAsFixed(0)}',
+                                        '₹${((item['amount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(0)}',
                                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1F2937)),
                                       ),
                                     ],

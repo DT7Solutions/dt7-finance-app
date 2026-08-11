@@ -721,14 +721,10 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
             ApiService.getExpenses(),
           ]),
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const SizedBox(
-                height: 50,
-                child: Center(child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2)),
-              );
-            }
-            final users = (snapshot.data?[0] as List<UserModel>?) ?? [];
-            final allExpenses = (snapshot.data?[1] as List<ExpenseModel>?) ?? [];
+            final usersList = (snapshot.data?[0] as List<UserModel>?) ?? [];
+            final users = usersList.isNotEmpty ? usersList : ApiService.storedUsers;
+            final expensesList = (snapshot.data?[1] as List<ExpenseModel>?) ?? [];
+            final allExpenses = expensesList.isNotEmpty ? expensesList : ApiService.storedExpenses;
 
             Map<int, List<ExpenseModel>> userExpenseMap = {};
             Map<int, double> userSpentMap = {};
@@ -916,11 +912,10 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
                         ApiService.getFounderDashboard(),
                       ]),
                       builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-                        }
-                        final users = (snapshot.data?[0] as List<UserModel>?) ?? [];
-                        final allExpenses = (snapshot.data?[1] as List<ExpenseModel>?) ?? [];
+                        final usersList = (snapshot.data?[0] as List<UserModel>?) ?? [];
+                        final users = usersList.isNotEmpty ? usersList : ApiService.storedUsers;
+                        final expensesList = (snapshot.data?[1] as List<ExpenseModel>?) ?? [];
+                        final allExpenses = expensesList.isNotEmpty ? expensesList : ApiService.storedExpenses;
                         final dashMap = (snapshot.data?[2] as Map<String, dynamic>?) ?? {};
 
                         Map<int, List<ExpenseModel>> userExpenseMap = {};

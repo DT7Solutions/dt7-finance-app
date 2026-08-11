@@ -35,10 +35,14 @@ class BudgetProgressBar extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                categoryName,
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+              Expanded(
+                child: Text(
+                  categoryName,
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
+              const SizedBox(width: 8),
               Text(
                 '₹${spent.toStringAsFixed(0)} / ₹${limit.toStringAsFixed(0)}',
                 style: TextStyle(

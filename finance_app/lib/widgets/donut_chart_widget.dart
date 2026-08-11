@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 
 class DonutChartWidget extends StatelessWidget {
@@ -17,37 +16,57 @@ class DonutChartWidget extends StatelessWidget {
     return formatter.format(amount);
   }
 
+  Color _parseColor(dynamic colorVal, int fallbackIndex) {
+    if (colorVal is Color) return colorVal;
+    if (colorVal is String && colorVal.startsWith('#')) {
+      final hex = colorVal.replaceAll('#', '');
+      if (hex.length == 6) {
+        return Color(int.parse('FF$hex', radix: 16));
+      }
+    }
+    final fallbackColors = [
+      const Color(0xFFFF5500),
+      const Color(0xFF2563EB),
+      const Color(0xFF10B981),
+      const Color(0xFFF59E0B),
+      const Color(0xFF8B5CF6),
+    ];
+    return fallbackColors[fallbackIndex % fallbackColors.length];
+  }
+
   @override
   Widget build(BuildContext context) {
     final defaultCategories = [
       {
         'name': 'Travel',
         'pct': 35,
-        'color': const Color(0xFFFF5500), // Vibrant Orange
+        'color': const Color(0xFFFF5500),
       },
       {
         'name': 'Food',
         'pct': 25,
-        'color': const Color(0xFFF59E0B), // Warm Amber
+        'color': const Color(0xFFF59E0B),
       },
       {
         'name': 'Fuel',
         'pct': 18,
-        'color': const Color(0xFF2563EB), // Royal Blue
+        'color': const Color(0xFF2563EB),
       },
       {
         'name': 'Office',
         'pct': 12,
-        'color': const Color(0xFF10B981), // Emerald Green
+        'color': const Color(0xFF10B981),
       },
       {
         'name': 'Others',
         'pct': 10,
-        'color': const Color(0xFF8B5CF6), // Purple
+        'color': const Color(0xFF8B5CF6),
       },
     ];
 
-    final categories = customCategories ?? defaultCategories;
+    final categories = (customCategories != null && customCategories!.isNotEmpty)
+        ? customCategories!
+        : defaultCategories;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -59,20 +78,11 @@ class DonutChartWidget extends StatelessWidget {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              PieChart(
-                PieChartData(
-                  sectionsSpace: 2,
-                  centerSpaceRadius: 38,
-                  startDegreeOffset: 270,
-                  sections: categories.map((cat) {
-                    final catColor = cat['color'] as Color;
-                    return PieChartSectionData(
-                      color: catColor,
-                      value: (cat['pct'] as num).toDouble(),
-                      title: '',
-                      radius: 20,
-                    );
-                  }).toList(),
+              CustomPaint(
+                size: const Size(130, 130),
+                painter: _DonutChartPainter(
+                  categories: categories,
+                  colorParser: _parseColor,
                 ),
               ),
               Column(
@@ -105,12 +115,17 @@ class DonutChartWidget extends StatelessWidget {
         ),
         const SizedBox(width: 10),
 
-        // Legend List with Exact Matching Colors
+        // Legend List with Safe Parsing
         Expanded(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: categories.map((cat) {
-              final catColor = cat['color'] as Color;
+            children: categories.asMap().entries.map((entry) {
+              final index = entry.key;
+              final cat = entry.value;
+              final catColor = _parseColor(cat['color'], index);
+              final name = (cat['name'] ?? cat['category'] ?? 'General').toString();
+              final pct = (num.tryParse((cat['pct'] ?? cat['percentage'])?.toString() ?? '') ?? 0).toInt();
+
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 3),
                 child: Row(
@@ -126,7 +141,7 @@ class DonutChartWidget extends StatelessWidget {
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        cat['name'] as String,
+                        name,
                         style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -137,7 +152,7 @@ class DonutChartWidget extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      '${cat['pct']}%',
+                      '$pct%',
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
@@ -153,4 +168,53 @@ class DonutChartWidget extends StatelessWidget {
       ],
     );
   }
+}
+
+class _DonutChartPainter extends CustomPainter {
+  final List<Map<String, dynamic>> categories;
+  final Color Function(dynamic colorVal, int index) colorParser;
+
+  _DonutChartPainter({required this.categories, required this.colorParser});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (categories.isEmpty) return;
+    final center = Offset(size.width / 2, size.height / 2);
+    const strokeWidth = 16.0;
+    final radius = (size.width - strokeWidth) / 2;
+
+    double totalPct = 0;
+    for (var cat in categories) {
+      final p = (num.tryParse((cat['pct'] ?? cat['percentage'])?.toString() ?? '') ?? 0).toDouble();
+      totalPct += p > 0 ? p : 1.0;
+    }
+    if (totalPct <= 0) totalPct = 1.0;
+
+    double startAngle = -1.5707963267948966; // -90 degrees (top)
+
+    for (int i = 0; i < categories.length; i++) {
+      final cat = categories[i];
+      final p = (num.tryParse((cat['pct'] ?? cat['percentage'])?.toString() ?? '') ?? 0).toDouble();
+      final pctVal = p > 0 ? p : 1.0;
+      final sweepAngle = (pctVal / totalPct) * 2 * 3.141592653589793;
+
+      final paint = Paint()
+        ..color = colorParser(cat['color'], i)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.butt;
+
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        startAngle,
+        sweepAngle - 0.04, // small gap between slices
+        false,
+        paint,
+      );
+      startAngle += sweepAngle;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DonutChartPainter oldDelegate) => true;
 }

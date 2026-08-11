@@ -62,7 +62,8 @@ class ApiService {
     for (final hostUrl in AuthService.candidateUrls) {
       final url = Uri.parse('$hostUrl/users/');
       try {
-        final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 2000));
+        final timeoutMs = AuthService.hasActiveBaseUrl ? 2000 : 400;
+        final response = await http.get(url, headers: await _getHeaders()).timeout(Duration(milliseconds: timeoutMs));
         if (response.statusCode == 200) {
           AuthService.setActiveBaseUrl(hostUrl);
           final data = jsonDecode(response.body);
@@ -674,6 +675,8 @@ class ApiService {
     }
   }
 
+  static List<ExpenseModel> get storedExpenses => List.unmodifiable(_storedExpenses);
+
   // --- EXPENSES ---
   static Future<List<ExpenseModel>> getExpenses() async {
     await _ensureExpensesLoaded();
@@ -1004,7 +1007,8 @@ class ApiService {
     for (final hostUrl in AuthService.candidateBaseUrls) {
       final url = Uri.parse('$hostUrl/budget-requests/');
       try {
-        final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 1500));
+        final timeoutMs = AuthService.hasActiveBaseUrl ? 1500 : 400;
+        final response = await http.get(url, headers: await _getHeaders()).timeout(Duration(milliseconds: timeoutMs));
         if (response.statusCode == 200) {
           AuthService.setActiveBaseUrl(hostUrl);
           final data = jsonDecode(response.body);
@@ -1194,7 +1198,8 @@ class ApiService {
     for (final hostUrl in AuthService.candidateUrls) {
       final url = Uri.parse('$hostUrl/dashboard/founder/');
       try {
-        final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 1500));
+        final timeoutMs = AuthService.hasActiveBaseUrl ? 1500 : 400;
+        final response = await http.get(url, headers: await _getHeaders()).timeout(Duration(milliseconds: timeoutMs));
         if (response.statusCode == 200) {
           AuthService.setActiveBaseUrl(hostUrl);
           final data = jsonDecode(response.body);
@@ -1283,7 +1288,7 @@ class ApiService {
   // --- ACCOUNTS, TRANSACTIONS, ANALYTICS & BUDGETS ---
   static Future<List<AccountModel>> getAccounts() async {
     final dash = await getFounderDashboard();
-    final bal = (dash?['remaining_budget'] as double?) ?? 0.0;
+    final bal = (num.tryParse(dash?['remaining_budget']?.toString() ?? '') ?? 0.0).toDouble();
     return [
       AccountModel(id: 1, name: 'Main Corporate Checking', accountType: 'CHECKING', balance: bal),
     ];
@@ -1299,9 +1304,9 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getAnalyticsSummary() async {
     final dash = await getFounderDashboard();
-    final bal = (dash?['remaining_budget'] as double?) ?? 0.0;
-    final exp = (dash?['total_expenses'] as double?) ?? 0.0;
-    final alloc = (dash?['total_allocated'] as double?) ?? 0.0;
+    final bal = (num.tryParse(dash?['remaining_budget']?.toString() ?? '') ?? 0.0).toDouble();
+    final exp = (num.tryParse(dash?['total_expenses']?.toString() ?? '') ?? 0.0).toDouble();
+    final alloc = (num.tryParse(dash?['total_allocated']?.toString() ?? '') ?? 0.0).toDouble();
     final savings = alloc > 0 ? (((alloc - exp) / alloc) * 100).clamp(0.0, 100.0) : 0.0;
 
     return {
