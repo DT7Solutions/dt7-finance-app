@@ -46,77 +46,89 @@ class RoleViewSet(viewsets.ModelViewSet):
         return Role.objects.all().order_by('id')
 
     def _ensure_default_roles(self):
-        if not Role.objects.exists():
-            default_roles = [
-                {
-                    'name': 'Admin / Founder',
-                    'code': 'ADMIN',
-                    'description': 'Full administrative control over all finances, users, approvals, and system settings.',
-                    'is_system_role': True,
-                    'can_view_all_expenses': True,
-                    'can_approve_expenses': True,
-                    'can_allocate_budget': True,
-                    'can_manage_users': True,
-                    'can_view_analytics': True,
-                },
-                {
-                    'name': 'Staff',
-                    'code': 'STAFF',
-                    'description': 'General staff member access to submit expenses and request budget allocations.',
-                    'is_system_role': True,
-                    'can_view_all_expenses': False,
-                    'can_approve_expenses': False,
-                    'can_allocate_budget': False,
-                    'can_manage_users': False,
-                    'can_view_analytics': False,
-                },
-                {
-                    'name': 'Accountant',
-                    'code': 'ACCOUNTANT',
-                    'description': 'Access to view financial reports, audit logs, and approve expense entries.',
-                    'is_system_role': True,
-                    'can_view_all_expenses': True,
-                    'can_approve_expenses': True,
-                    'can_allocate_budget': False,
-                    'can_manage_users': False,
-                    'can_view_analytics': True,
-                },
-                {
-                    'name': 'Finance Manager',
-                    'code': 'MANAGER',
-                    'description': 'Can manage team budgets, view all expenses, and approve budget requests.',
-                    'is_system_role': True,
-                    'can_view_all_expenses': True,
-                    'can_approve_expenses': True,
-                    'can_allocate_budget': True,
-                    'can_manage_users': False,
-                    'can_view_analytics': True,
-                },
-                {
-                    'name': 'Finance Auditor',
-                    'code': 'FINANCE',
-                    'description': 'View-only access to financial reports, analytics, and expense audit logs.',
-                    'is_system_role': True,
-                    'can_view_all_expenses': True,
-                    'can_approve_expenses': False,
-                    'can_allocate_budget': False,
-                    'can_manage_users': False,
-                    'can_view_analytics': True,
-                },
-                {
-                    'name': 'Employee',
-                    'code': 'EMPLOYEE',
-                    'description': 'Standard employee access to submit expenses, request budgets, and view personal wallet.',
-                    'is_system_role': True,
-                    'can_view_all_expenses': False,
-                    'can_approve_expenses': False,
-                    'can_allocate_budget': False,
-                    'can_manage_users': False,
-                    'can_view_analytics': False,
-                },
-            ]
-            for r in default_roles:
-                Role.objects.get_or_create(code=r['code'], defaults=r)
+        Role.objects.filter(code='ADMIN', name='Admin / Founder').update(name='Admin')
+
+        default_roles = [
+            {
+                'name': 'Founder',
+                'code': 'FOUNDER',
+                'description': 'Super User role with overall executive authority over all system features, financial approvals, budget allocations, and user management.',
+                'is_system_role': True,
+                'can_view_all_expenses': True,
+                'can_approve_expenses': True,
+                'can_allocate_budget': True,
+                'can_manage_users': True,
+                'can_view_analytics': True,
+            },
+            {
+                'name': 'Admin',
+                'code': 'ADMIN',
+                'description': 'Full administrative control over all finances, users, approvals, and system settings.',
+                'is_system_role': True,
+                'can_view_all_expenses': True,
+                'can_approve_expenses': True,
+                'can_allocate_budget': True,
+                'can_manage_users': True,
+                'can_view_analytics': True,
+            },
+            {
+                'name': 'Staff',
+                'code': 'STAFF',
+                'description': 'General staff member access to submit expenses and request budget allocations.',
+                'is_system_role': True,
+                'can_view_all_expenses': False,
+                'can_approve_expenses': False,
+                'can_allocate_budget': False,
+                'can_manage_users': False,
+                'can_view_analytics': False,
+            },
+            {
+                'name': 'Accountant',
+                'code': 'ACCOUNTANT',
+                'description': 'Access to view financial reports, audit logs, and approve expense entries.',
+                'is_system_role': True,
+                'can_view_all_expenses': True,
+                'can_approve_expenses': True,
+                'can_allocate_budget': False,
+                'can_manage_users': False,
+                'can_view_analytics': True,
+            },
+            {
+                'name': 'Finance Manager',
+                'code': 'MANAGER',
+                'description': 'Can manage team budgets, view all expenses, and approve budget requests.',
+                'is_system_role': True,
+                'can_view_all_expenses': True,
+                'can_approve_expenses': True,
+                'can_allocate_budget': True,
+                'can_manage_users': False,
+                'can_view_analytics': True,
+            },
+            {
+                'name': 'Finance Auditor',
+                'code': 'FINANCE',
+                'description': 'View-only access to financial reports, analytics, and expense audit logs.',
+                'is_system_role': True,
+                'can_view_all_expenses': True,
+                'can_approve_expenses': False,
+                'can_allocate_budget': False,
+                'can_manage_users': False,
+                'can_view_analytics': True,
+            },
+            {
+                'name': 'Employee',
+                'code': 'EMPLOYEE',
+                'description': 'Standard employee access to submit expenses, request budgets, and view personal wallet.',
+                'is_system_role': True,
+                'can_view_all_expenses': False,
+                'can_approve_expenses': False,
+                'can_allocate_budget': False,
+                'can_manage_users': False,
+                'can_view_analytics': False,
+            },
+        ]
+        for r in default_roles:
+            Role.objects.get_or_create(code=r['code'], defaults=r)
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -151,8 +163,11 @@ class UserViewSet(viewsets.ModelViewSet):
             
         profile, _ = UserProfile.objects.get_or_create(user=user)
         role_obj = Role.objects.filter(Q(code__iexact=role_str) | Q(name__iexact=role_str)).first()
-        if not role_obj and role_str in ['ADMIN', 'FOUNDER']:
-            role_obj = Role.objects.filter(code='ADMIN').first()
+        if not role_obj:
+            if role_str == 'FOUNDER':
+                role_obj = Role.objects.filter(code='FOUNDER').first()
+            elif role_str == 'ADMIN':
+                role_obj = Role.objects.filter(code='ADMIN').first()
         
         profile.role = role_str if role_str else (role_obj.code if role_obj else 'EMPLOYEE')
         if role_obj:

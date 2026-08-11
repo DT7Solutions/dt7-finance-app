@@ -24,7 +24,7 @@ class UserAdmin(BaseUserAdmin):
             if hasattr(obj.profile, 'get_role_display'):
                 return obj.profile.get_role_display()
             return dict(UserProfile.ROLE_CHOICES).get(obj.profile.role, obj.profile.role)
-        return 'Admin / Founder' if obj.is_superuser else 'Employee'
+        return 'Founder' if obj.is_superuser else ('Admin' if obj.is_staff else 'Employee')
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):

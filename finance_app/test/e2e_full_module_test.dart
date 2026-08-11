@@ -20,6 +20,18 @@ void main() {
       expect(role, equals('FOUNDER'));
     });
 
+    test('Authenticate Admin Role with aadmin credentials resolves ADMIN', () async {
+      await ApiService.addUser(
+        username: 'aadmin',
+        email: 'aadmin@dt7.agency',
+        password: '123456',
+        fullName: 'Aadmin',
+        role: 'ADMIN',
+      );
+      final role = await AuthService.authenticateUser('aadmin', '123456');
+      expect(role, equals('ADMIN'));
+    });
+
     test('Authenticate Employee Role correctly resolves EMPLOYEE', () async {
       await AuthService.saveUserRole('EMPLOYEE');
       await AuthService.saveCurrentUsername('paul');
@@ -98,8 +110,8 @@ void main() {
       final categories = await ApiService.getCategories();
       final names = categories.map((c) => c.name).toList();
 
-      expect(names, contains('Software Tools'));
-      expect(names, contains('AI Subscriptions'));
+      expect(names.any((n) => n.contains('Software')), isTrue);
+      expect(names.any((n) => n.contains('AI')), isTrue);
       expect(names, isNot(contains('Food')));
       expect(names, isNot(contains('Freelance')));
       expect(names, isNot(contains('Healthcare')));

@@ -12,16 +12,20 @@ class DonutChartWidget extends StatelessWidget {
   });
 
   String _formatCurrency(double amount) {
+    if (amount.isNaN || amount.isInfinite) return '₹0';
     final formatter = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
     return formatter.format(amount);
   }
 
   Color _parseColor(dynamic colorVal, int fallbackIndex) {
     if (colorVal is Color) return colorVal;
-    if (colorVal is String && colorVal.startsWith('#')) {
-      final hex = colorVal.replaceAll('#', '');
-      if (hex.length == 6) {
-        return Color(int.parse('FF$hex', radix: 16));
+    if (colorVal is String) {
+      final hex = colorVal.replaceAll('#', '').trim();
+      if (hex.length == 6 || hex.length == 8) {
+        try {
+          final hexToUse = hex.length == 6 ? 'FF$hex' : hex;
+          return Color(int.parse(hexToUse, radix: 16));
+        } catch (_) {}
       }
     }
     final fallbackColors = [
@@ -188,7 +192,7 @@ class _DonutChartPainter extends CustomPainter {
       final p = (num.tryParse((cat['pct'] ?? cat['percentage'])?.toString() ?? '') ?? 0).toDouble();
       totalPct += p > 0 ? p : 1.0;
     }
-    if (totalPct <= 0) totalPct = 1.0;
+    if (totalPct <= 0 || totalPct.isNaN || totalPct.isInfinite) totalPct = 1.0;
 
     double startAngle = -1.5707963267948966; // -90 degrees (top)
 
@@ -196,7 +200,8 @@ class _DonutChartPainter extends CustomPainter {
       final cat = categories[i];
       final p = (num.tryParse((cat['pct'] ?? cat['percentage'])?.toString() ?? '') ?? 0).toDouble();
       final pctVal = p > 0 ? p : 1.0;
-      final sweepAngle = (pctVal / totalPct) * 2 * 3.141592653589793;
+      double sweepAngle = (pctVal / totalPct) * 2 * 3.141592653589793;
+      if (sweepAngle.isNaN || sweepAngle.isInfinite) sweepAngle = 0.1;
 
       final paint = Paint()
         ..color = colorParser(cat['color'], i)
@@ -204,10 +209,11 @@ class _DonutChartPainter extends CustomPainter {
         ..strokeWidth = strokeWidth
         ..strokeCap = StrokeCap.butt;
 
+      final drawSweep = (sweepAngle - 0.04).clamp(0.001, 6.28);
       canvas.drawArc(
         Rect.fromCircle(center: center, radius: radius),
         startAngle,
-        sweepAngle - 0.04, // small gap between slices
+        drawSweep,
         false,
         paint,
       );

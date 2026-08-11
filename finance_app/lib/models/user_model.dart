@@ -50,7 +50,9 @@ class UserModel {
     return '$firstName $lastName'.trim();
   }
 
+  bool get isFounder => role == 'FOUNDER';
   bool get isAdmin => role == 'ADMIN';
+  bool get isFounderOrAdmin => role == 'FOUNDER' || role == 'ADMIN' || role == 'SUPERUSER';
 
   Map<String, dynamic> toJson() {
     return {

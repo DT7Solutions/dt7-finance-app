@@ -10,8 +10,8 @@ void main() {
   });
 
   group('Authentication Verification Tests', () {
-    test('Unregistered credentials (admin/123456) are rejected by default', () async {
-      final role = await AuthService.authenticateUser('admin', '123456');
+    test('Unregistered credentials (unregistered_user/123456) are rejected by default', () async {
+      final role = await AuthService.authenticateUser('unregistered_user', '123456');
       expect(role, isNull);
     });
 

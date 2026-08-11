@@ -15,6 +15,12 @@ import '../models/budget_model.dart';
 import '../models/role_model.dart';
 
 class ApiService {
+  static Future<void> ensureDataLoaded() async {
+    await _ensureUsersLoaded();
+    await _ensureExpensesLoaded();
+    await _ensureBudgetRequestsLoaded();
+  }
+
   static Future<Map<String, String>> _getHeaders() async {
     final token = await AuthService.getToken();
     final isRealToken = token != null && token.isNotEmpty && !token.startsWith('jwt_access_token_');
@@ -51,6 +57,16 @@ class ApiService {
     } catch (_) {}
 
     if (_storedUsers.isEmpty) {
+      _storedUsers.addAll([
+        UserModel(id: 1, username: 'founder', email: 'founder@dt7.agency', firstName: 'Diya', lastName: 'Founder', allocatedAmount: 100000, role: 'FOUNDER', department: 'Executive'),
+        UserModel(id: 2, username: 'admin', email: 'admin@dt7.agency', firstName: 'Admin', lastName: 'User', allocatedAmount: 50000, role: 'ADMIN', department: 'Administration'),
+        UserModel(id: 3, username: 'aadmin', email: 'aadmin@dt7.agency', firstName: 'Aadmin', lastName: 'Manager', allocatedAmount: 50000, role: 'ADMIN', department: 'Administration'),
+        UserModel(id: 4, username: 'john_doe', email: 'john.doe@example.com', firstName: 'John', lastName: 'Doe', allocatedAmount: 10000, role: 'FOUNDER', department: 'Executive'),
+        UserModel(id: 5, username: 'paul_pk', email: 'paul@example.com', firstName: 'Paul', lastName: 'PK', allocatedAmount: 25000, role: 'EMPLOYEE', department: 'Engineering'),
+        UserModel(id: 6, username: 'paul', email: 'paul@gmail.com', firstName: 'Paul', lastName: 'PK', allocatedAmount: 25000, role: 'EMPLOYEE', department: 'Engineering'),
+        UserModel(id: 7, username: 'neha', email: 'neha@gmail.com', firstName: 'Neha', lastName: 'Singh', allocatedAmount: 8000, role: 'EMPLOYEE', department: 'Design'),
+        UserModel(id: 8, username: 'ramu', email: 'ramu@gmail.com', firstName: 'Ramu', lastName: 'Sharma', allocatedAmount: 20000, role: 'EMPLOYEE', department: 'Sales'),
+      ]);
       await _saveUsersToPrefs();
     }
   }
@@ -259,7 +275,7 @@ class ApiService {
             'role': role,
             'initial_allocated_amount': allocatedAmount,
           }),
-        ).timeout(const Duration(milliseconds: 2000));
+        ).timeout(Duration(milliseconds: AuthService.hasActiveBaseUrl ? 2000 : 200));
         if (response.statusCode == 201 || response.statusCode == 200) {
           await getUsers(); // Refresh user list from backend
           return true;
@@ -289,7 +305,19 @@ class ApiService {
   static final List<RoleModel> _defaultRoles = [
     RoleModel(
       id: 1,
-      name: 'Admin / Founder',
+      name: 'Founder',
+      code: 'FOUNDER',
+      description: 'Super User role with overall executive authority over all system features, financial approvals, budget allocations, and user management.',
+      isSystemRole: true,
+      canViewAllExpenses: true,
+      canApproveExpenses: true,
+      canAllocateBudget: true,
+      canManageUsers: true,
+      canViewAnalytics: true,
+    ),
+    RoleModel(
+      id: 2,
+      name: 'Admin',
       code: 'ADMIN',
       description: 'Full administrative control over all finances, users, approvals, and system settings.',
       isSystemRole: true,
@@ -671,6 +699,11 @@ class ApiService {
       }
     } catch (_) {}
     if (_storedExpenses.isEmpty) {
+      _storedExpenses.addAll([
+        ExpenseModel(id: 1, title: 'Server Hosting (AWS)', amount: 15000.0, categoryName: 'Cloud Hosting & Infrastructure (AWS/Azure/GCP)', dateTime: '2026-08-06', status: 'Approved', userName: 'paul_pk'),
+        ExpenseModel(id: 2, title: 'OpenAI API Subscriptions', amount: 5000.0, categoryName: 'AI Tools & API Subscriptions (OpenAI/Claude)', dateTime: '2026-08-07', status: 'Approved', userName: 'john_doe'),
+        ExpenseModel(id: 3, title: 'Team Lunch & Client Onsite', amount: 3500.0, categoryName: 'Meals & Team Offsites', dateTime: '2026-08-08', status: 'Approved', userName: 'rahul_sharma'),
+      ]);
       await _saveExpensesToPrefs();
     }
   }
@@ -1203,8 +1236,8 @@ class ApiService {
         if (response.statusCode == 200) {
           AuthService.setActiveBaseUrl(hostUrl);
           final data = jsonDecode(response.body);
-          if (data is Map<String, dynamic>) {
-            return data;
+          if (data is Map) {
+            return Map<String, dynamic>.from(data);
           }
         }
       } catch (_) {}

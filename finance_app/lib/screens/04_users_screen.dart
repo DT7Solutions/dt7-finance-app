@@ -76,7 +76,7 @@ class _UsersScreenState extends State<UsersScreen> {
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
-                        children: ['All', 'Admin / Founder', 'Employee'].map((role) {
+                        children: ['All', 'Founder', 'Admin', 'Employee'].map((role) {
                           final isSel = _roleFilter == role;
                           return ChoiceChip(
                             label: Text(role),
@@ -482,12 +482,13 @@ class _UsersScreenState extends State<UsersScreen> {
                       items: (availableRoles.isNotEmpty
                               ? availableRoles
                               : [
-                                  RoleModel(id: 1, name: 'Admin / Founder', code: 'ADMIN'),
-                                  RoleModel(id: 2, name: 'Staff', code: 'STAFF'),
-                                  RoleModel(id: 3, name: 'Accountant', code: 'ACCOUNTANT'),
-                                  RoleModel(id: 4, name: 'Finance Manager', code: 'MANAGER'),
-                                  RoleModel(id: 5, name: 'Finance Auditor', code: 'FINANCE'),
-                                  RoleModel(id: 6, name: 'Employee', code: 'EMPLOYEE'),
+                                  RoleModel(id: 1, name: 'Founder', code: 'FOUNDER'),
+                                  RoleModel(id: 2, name: 'Admin', code: 'ADMIN'),
+                                  RoleModel(id: 3, name: 'Staff', code: 'STAFF'),
+                                  RoleModel(id: 4, name: 'Accountant', code: 'ACCOUNTANT'),
+                                  RoleModel(id: 5, name: 'Finance Manager', code: 'MANAGER'),
+                                  RoleModel(id: 6, name: 'Finance Auditor', code: 'FINANCE'),
+                                  RoleModel(id: 7, name: 'Employee', code: 'EMPLOYEE'),
                                 ])
                           .map((r) => DropdownMenuItem<String>(
                                 value: r.code,
@@ -661,12 +662,13 @@ class _UsersScreenState extends State<UsersScreen> {
                       items: (availableRoles.isNotEmpty
                               ? availableRoles
                               : [
-                                  RoleModel(id: 1, name: 'Admin / Founder', code: 'ADMIN'),
-                                  RoleModel(id: 2, name: 'Staff', code: 'STAFF'),
-                                  RoleModel(id: 3, name: 'Accountant', code: 'ACCOUNTANT'),
-                                  RoleModel(id: 4, name: 'Finance Manager', code: 'MANAGER'),
-                                  RoleModel(id: 5, name: 'Finance Auditor', code: 'FINANCE'),
-                                  RoleModel(id: 6, name: 'Employee', code: 'EMPLOYEE'),
+                                  RoleModel(id: 1, name: 'Founder', code: 'FOUNDER'),
+                                  RoleModel(id: 2, name: 'Admin', code: 'ADMIN'),
+                                  RoleModel(id: 3, name: 'Staff', code: 'STAFF'),
+                                  RoleModel(id: 4, name: 'Accountant', code: 'ACCOUNTANT'),
+                                  RoleModel(id: 5, name: 'Finance Manager', code: 'MANAGER'),
+                                  RoleModel(id: 6, name: 'Finance Auditor', code: 'FINANCE'),
+                                  RoleModel(id: 7, name: 'Employee', code: 'EMPLOYEE'),
                                 ])
                           .map((r) => DropdownMenuItem<String>(
                                 value: r.code,
@@ -867,8 +869,10 @@ class _UsersScreenState extends State<UsersScreen> {
 
     if (_roleFilter != 'All') {
       rawList = rawList.where((u) {
-        if (_roleFilter == 'Admin / Founder') return u.isAdmin || u.role == 'FOUNDER';
-        return !u.isAdmin && u.role != 'FOUNDER';
+        if (_roleFilter == 'Founder') return u.isFounder || u.role == 'FOUNDER' || u.username.toLowerCase().contains('founder');
+        if (_roleFilter == 'Admin') return u.isAdmin || u.role == 'ADMIN' || u.username.toLowerCase().contains('admin');
+        if (_roleFilter == 'Employee') return u.role == 'EMPLOYEE' || (!u.isAdmin && !u.isFounder && u.role != 'ADMIN' && u.role != 'FOUNDER');
+        return true;
       }).toList();
     }
 
@@ -1047,7 +1051,7 @@ class _UsersScreenState extends State<UsersScreen> {
                                 u.role,
                                 style: TextStyle(
                                   fontSize: 10,
-                                  color: u.isAdmin || u.role == 'ADMIN' ? AppColors.primary : AppColors.approvedGreen,
+                                  color: u.isFounder ? Colors.purple : (u.isAdmin || u.role == 'ADMIN' ? AppColors.primary : AppColors.approvedGreen),
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),

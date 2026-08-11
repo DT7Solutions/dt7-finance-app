@@ -33,15 +33,22 @@ class UserDetailSerializer(serializers.ModelSerializer):
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'profile', 'allocated_amount', 'used_amount', 'remaining_amount']
 
     def get_role(self, obj):
-        if obj.is_superuser or obj.is_staff or obj.username.lower() in ['admin', 'admin2', 'founder', 'diya', 'diya_founder']:
-            return 'ADMIN'
+        if obj.is_superuser or obj.username.lower() in ['founder', 'diya', 'diya_founder']:
+            return 'FOUNDER'
         if hasattr(obj, 'profile') and obj.profile:
             role_str = str(obj.profile.role or '').upper()
-            if role_str in ['ADMIN', 'FOUNDER', 'SUPERUSER']:
-                return 'ADMIN'
-            if hasattr(obj.profile, 'role_fk') and obj.profile.role_fk and str(obj.profile.role_fk.code).upper() in ['ADMIN', 'FOUNDER']:
-                return 'ADMIN'
-            return role_str if role_str else 'EMPLOYEE'
+            if role_str == 'FOUNDER':
+                return 'FOUNDER'
+            if role_str in ['ADMIN', 'SUPERUSER']:
+                return 'FOUNDER' if role_str == 'SUPERUSER' else 'ADMIN'
+            if hasattr(obj.profile, 'role_fk') and obj.profile.role_fk:
+                fk_code = str(obj.profile.role_fk.code).upper()
+                if fk_code in ['FOUNDER', 'ADMIN']:
+                    return fk_code
+            if role_str:
+                return role_str
+        if obj.is_staff or 'admin' in obj.username.lower():
+            return 'ADMIN'
         return 'EMPLOYEE'
 
     def get_allocated_amount(self, obj):

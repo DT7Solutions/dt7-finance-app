@@ -321,7 +321,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final email = _currentUser?.email.isNotEmpty == true 
         ? _currentUser!.email 
         : (username.isNotEmpty ? '$username@gmail.com' : 'employee@gmail.com');
-    final roleTitle = (_currentUser?.isAdmin == true || _currentUser?.role == 'ADMIN' || _currentUser?.role == 'FOUNDER') ? 'FOUNDER & ADMIN' : 'STAFF EMPLOYEE';
+    final roleTitle = (_currentUser?.isFounder == true || _currentUser?.role == 'FOUNDER')
+        ? 'FOUNDER (SUPER USER)'
+        : ((_currentUser?.isAdmin == true || _currentUser?.role == 'ADMIN') ? 'ADMIN' : 'STAFF EMPLOYEE');
     final empId = _currentUser?.employeeId.isNotEmpty == true ? _currentUser!.employeeId : 'DT7EMP002';
     final dept = _currentUser?.department.isNotEmpty == true ? _currentUser!.department : 'Operations Department';
     final phone = _currentUser?.phone ?? '+91 98765 43210';

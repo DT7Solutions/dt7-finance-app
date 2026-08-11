@@ -276,21 +276,33 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
 
   Future<void> _loadDashboard() async {
     try {
+      await ApiService.ensureDataLoaded();
       final results = await Future.wait([
-        ApiService.getFounderDashboard(),
-        ApiService.getExpenses(),
-        ApiService.getBudgetRequests(),
-        ApiService.getCurrentUser(),
-        AuthService.getProfilePhoto(),
+        ApiService.getFounderDashboard().timeout(const Duration(milliseconds: 1500)).catchError((_) => null),
+        ApiService.getExpenses().timeout(const Duration(milliseconds: 1500)).catchError((_) => <ExpenseModel>[]),
+        ApiService.getBudgetRequests().timeout(const Duration(milliseconds: 1500)).catchError((_) => <BudgetRequestModel>[]),
+        ApiService.getCurrentUser().timeout(const Duration(milliseconds: 1500)).catchError((_) => null),
+        AuthService.getProfilePhoto().timeout(const Duration(milliseconds: 1500)).catchError((_) => null),
       ]);
 
       if (mounted) {
+        final rawDash = results[0];
+        Map<String, dynamic>? parsedDash;
+        if (rawDash is Map) {
+          parsedDash = Map<String, dynamic>.from(rawDash);
+        }
+
+        final fetchedExpenses = (results[1] is List<ExpenseModel>) ? (results[1] as List<ExpenseModel>) : <ExpenseModel>[];
+        final fetchedRequests = (results[2] is List<BudgetRequestModel>) ? (results[2] as List<BudgetRequestModel>) : <BudgetRequestModel>[];
+        final fetchedUser = (results[3] is UserModel) ? (results[3] as UserModel) : null;
+        final fetchedPhoto = (results[4] is String) ? (results[4] as String) : null;
+
         setState(() {
-          _dashboardData = results[0] as Map<String, dynamic>?;
-          _allExpenses = (results[1] as List<ExpenseModel>?) ?? [];
-          _allBudgetRequests = (results[2] as List<BudgetRequestModel>?) ?? [];
-          _currentUser = results[3] as UserModel?;
-          _profilePhotoUrl = results[4] as String?;
+          _dashboardData = parsedDash;
+          _allExpenses = fetchedExpenses.isNotEmpty ? fetchedExpenses : ApiService.storedExpenses;
+          _allBudgetRequests = fetchedRequests;
+          _currentUser = fetchedUser;
+          _profilePhotoUrl = fetchedPhoto;
         });
       }
     } catch (e, stack) {
@@ -375,36 +387,41 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              children: [
-                const Text(
-                  'Pending Approvals Queue',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1F2937),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: pendingItems.isNotEmpty ? const Color(0xFFFFF5ED) : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: pendingItems.isNotEmpty ? const Color(0xFFFFD4C0) : Colors.grey.shade300,
+            Expanded(
+              child: Row(
+                children: [
+                  const Flexible(
+                    child: Text(
+                      'Pending Approvals Queue',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1F2937),
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  child: Text(
-                    '${pendingItems.length}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: pendingItems.isNotEmpty ? const Color(0xFFFF5500) : Colors.grey.shade600,
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: pendingItems.isNotEmpty ? const Color(0xFFFFF5ED) : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: pendingItems.isNotEmpty ? const Color(0xFFFFD4C0) : Colors.grey.shade300,
+                      ),
+                    ),
+                    child: Text(
+                      '${pendingItems.length}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: pendingItems.isNotEmpty ? const Color(0xFFFF5500) : Colors.grey.shade600,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
             TextButton(
               onPressed: () => Navigator.push(
@@ -462,7 +479,13 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
             itemBuilder: (context, index) {
               final item = pendingItems[index];
               final isBudgetReq = item['type'] == 'budget_request';
-              final uName = item['user'] as String? ?? 'Employee';
+              final rawUser = item['user'];
+              final uName = rawUser is Map
+                  ? (rawUser['username'] ?? rawUser['first_name'] ?? 'Employee').toString()
+                  : (rawUser?.toString() ?? 'Employee');
+              final itemTitle = (item['title'] ?? '').toString();
+              final itemCat = (item['category'] ?? '').toString();
+              final itemAmt = (num.tryParse(item['amount']?.toString() ?? '') ?? 0.0).toDouble();
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 10),
@@ -501,12 +524,12 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      item['title'] as String,
+                                      itemTitle,
                                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1F2937)),
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                     Text(
-                                      '$uName • ${item['category']}',
+                                      '$uName • $itemCat',
                                       style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
                                     ),
                                   ],
@@ -517,7 +540,7 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          '₹${((item['amount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(0)}',
+                          '₹${itemAmt.toStringAsFixed(0)}',
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1F2937)),
                         ),
                       ],
@@ -583,6 +606,7 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
   }
 
   String _formatCurrency(double amount) {
+    if (amount.isNaN || amount.isInfinite) return '₹0';
     final isNegative = amount < 0;
     final absAmount = amount.abs();
     final formatter = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
@@ -699,12 +723,13 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                       items: (availableRoles.isNotEmpty
                               ? availableRoles
                               : [
-                                  RoleModel(id: 1, name: 'Admin / Founder', code: 'ADMIN'),
-                                  RoleModel(id: 2, name: 'Staff', code: 'STAFF'),
-                                  RoleModel(id: 3, name: 'Accountant', code: 'ACCOUNTANT'),
-                                  RoleModel(id: 4, name: 'Finance Manager', code: 'MANAGER'),
-                                  RoleModel(id: 5, name: 'Finance Auditor', code: 'FINANCE'),
-                                  RoleModel(id: 6, name: 'Employee', code: 'EMPLOYEE'),
+                                  RoleModel(id: 1, name: 'Founder', code: 'FOUNDER'),
+                                  RoleModel(id: 2, name: 'Admin', code: 'ADMIN'),
+                                  RoleModel(id: 3, name: 'Staff', code: 'STAFF'),
+                                  RoleModel(id: 4, name: 'Accountant', code: 'ACCOUNTANT'),
+                                  RoleModel(id: 5, name: 'Finance Manager', code: 'MANAGER'),
+                                  RoleModel(id: 6, name: 'Finance Auditor', code: 'FINANCE'),
+                                  RoleModel(id: 7, name: 'Employee', code: 'EMPLOYEE'),
                                 ])
                           .map((r) => DropdownMenuItem<String>(
                                 value: r.code,
@@ -1331,40 +1356,67 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
   }
 
   List<Map<String, dynamic>> _calculateCategoryBreakdown(List<ExpenseModel> expenses) {
-    if (_dashboardData != null && _dashboardData!['category_breakdown'] is List && (_dashboardData!['category_breakdown'] as List).isNotEmpty) {
-      final List rawList = _dashboardData!['category_breakdown'];
-      final colors = [
-        const Color(0xFFFF5500),
-        const Color(0xFF2563EB),
-        const Color(0xFF10B981),
-        const Color(0xFFF59E0B),
-        const Color(0xFF8B5CF6),
-        const Color(0xFFEC4899),
-        const Color(0xFF06B6D4),
-        const Color(0xFF64748B),
-      ];
-      int colorIdx = 0;
-      return rawList.map((item) {
-        final name = (item['category'] ?? item['name'] ?? 'General').toString();
-        final pct = (num.tryParse((item['percentage'] ?? item['pct'])?.toString() ?? '') ?? 0).toInt();
-        final colorVal = item['color'];
-        Color c;
-        if (colorVal is Color) {
-          c = colorVal;
-        } else if (colorVal is String && colorVal.startsWith('#')) {
-          final hex = colorVal.replaceAll('#', '');
-          c = Color(int.parse('FF$hex', radix: 16));
-        } else {
-          c = colors[colorIdx % colors.length];
+    try {
+      final rawBreakdown = _dashboardData?['category_breakdown'] ?? _dashboardData?['categories_breakdown'];
+      if (_dashboardData != null && rawBreakdown is List && (rawBreakdown as List).isNotEmpty) {
+        final List rawList = rawBreakdown;
+        final colors = [
+          const Color(0xFFFF5500),
+          const Color(0xFF2563EB),
+          const Color(0xFF10B981),
+          const Color(0xFFF59E0B),
+          const Color(0xFF8B5CF6),
+          const Color(0xFFEC4899),
+          const Color(0xFF06B6D4),
+          const Color(0xFF64748B),
+        ];
+        int colorIdx = 0;
+        final List<Map<String, dynamic>> parsedList = [];
+        for (var item in rawList) {
+          String name = 'General';
+          dynamic colorVal;
+          int pct = 0;
+          double amt = 0.0;
+
+          if (item is Map) {
+            name = (item['category'] ?? item['name'] ?? 'General').toString();
+            pct = (num.tryParse((item['percentage'] ?? item['pct'])?.toString() ?? '') ?? 0).toInt();
+            colorVal = item['color'];
+            amt = (num.tryParse(item['amount']?.toString() ?? '') ?? 0.0).toDouble();
+          } else if (item != null) {
+            name = item.toString();
+          }
+
+          Color c;
+          if (colorVal is Color) {
+            c = colorVal;
+          } else if (colorVal is String) {
+            final hex = colorVal.replaceAll('#', '').trim();
+            if (hex.length == 6 || hex.length == 8) {
+              try {
+                final hexToUse = hex.length == 6 ? 'FF$hex' : hex;
+                c = Color(int.parse(hexToUse, radix: 16));
+              } catch (_) {
+                c = colors[colorIdx % colors.length];
+              }
+            } else {
+              c = colors[colorIdx % colors.length];
+            }
+          } else {
+            c = colors[colorIdx % colors.length];
+          }
+          colorIdx++;
+          parsedList.add({
+            'name': name,
+            'pct': pct,
+            'color': c,
+            'amount': amt,
+          });
         }
-        colorIdx++;
-        return {
-          'name': name,
-          'pct': pct,
-          'color': c,
-          'amount': (num.tryParse(item['amount']?.toString() ?? '') ?? 0.0).toDouble(),
-        };
-      }).toList();
+        if (parsedList.isNotEmpty) return parsedList;
+      }
+    } catch (e, stack) {
+      debugPrint('Error in _calculateCategoryBreakdown: $e\n$stack');
     }
 
     if (expenses.isEmpty) {
@@ -1477,9 +1529,12 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
                         ApiService.getExpenses(),
                       ]),
                       builder: (context, snapshot) {
-                        final usersList = (snapshot.data?[0] as List<UserModel>?) ?? [];
+                        final rawUsers = snapshot.data?[0];
+                        final List<UserModel> usersList = rawUsers is List ? rawUsers.whereType<UserModel>().toList() : [];
                         final users = usersList.isNotEmpty ? usersList : ApiService.storedUsers;
-                        final expensesList = (snapshot.data?[1] as List<ExpenseModel>?) ?? [];
+
+                        final rawExpenses = snapshot.data?[1];
+                        final List<ExpenseModel> expensesList = rawExpenses is List ? rawExpenses.whereType<ExpenseModel>().toList() : [];
                         final allExpenses = expensesList.isNotEmpty ? expensesList : _allExpenses;
 
                         Map<int, List<ExpenseModel>> userExpenseMap = {};
@@ -1816,32 +1871,52 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
 
 
 
-  Widget _buildFounderTab() {
-    if (_isLoading) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(40.0),
-          child: CircularProgressIndicator(color: AppColors.primary),
-        ),
+  Widget _buildAvatarImage(String? path, {required double size}) {
+    if (path != null && (path.startsWith('http://') || path.startsWith('https://'))) {
+      return Image.network(
+        path,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _buildDefaultAvatar(size),
       );
     }
+    return _buildDefaultAvatar(size);
+  }
 
-    final usersList = ApiService.storedUsers;
-    final fallbackAllocated = usersList.fold(0.0, (sum, u) => sum + u.allocatedAmount);
-    final activeExpensesSum = _allExpenses.where((e) => !e.isRejected).fold(0.0, (s, e) => s + e.amount);
-    final fallbackRemaining = fallbackAllocated - activeExpensesSum;
+  Widget _buildDefaultAvatar(double size) {
+    return CircleAvatar(
+      radius: size / 2,
+      backgroundColor: AppColors.primaryLight,
+      child: const Icon(Icons.person, color: AppColors.primary),
+    );
+  }
 
-    final remaining = (num.tryParse(_dashboardData?['remaining_budget']?.toString() ?? '') ?? fallbackRemaining).toDouble();
-    final allocated = (num.tryParse(_dashboardData?['total_allocated']?.toString() ?? '') ?? fallbackAllocated).toDouble();
-    final backendExpenses = (num.tryParse(_dashboardData?['total_expenses']?.toString() ?? '') ?? 0.0).toDouble();
-    final expenses = backendExpenses > 0 ? backendExpenses : activeExpensesSum;
-    final users = int.tryParse(_dashboardData?['total_users']?.toString() ?? '') ?? (usersList.isNotEmpty ? usersList.length : _allExpenses.map((e) => e.userName).toSet().length);
-    final overBudget = int.tryParse(_dashboardData?['over_budget']?.toString() ?? '') ?? usersList.where((u) => u.remainingAmount < 0 && u.allocatedAmount > 0).length;
-    final isNegative = remaining < 0;
-    final pendingExpenses = _allExpenses.where((e) => e.isPending).toList();
+  Widget _buildFounderTab() {
+    try {
+      if (_isLoading) {
+        return const Center(
+          child: Padding(
+            padding: EdgeInsets.all(40.0),
+            child: CircularProgressIndicator(color: AppColors.primary),
+          ),
+        );
+      }
 
-    return SafeArea(
-      child: RefreshIndicator(
+      final usersList = ApiService.storedUsers;
+      final fallbackAllocated = usersList.fold(0.0, (sum, u) => sum + u.allocatedAmount);
+      final activeExpensesSum = _allExpenses.where((e) => !e.isRejected).fold(0.0, (s, e) => s + e.amount);
+      final fallbackRemaining = fallbackAllocated - activeExpensesSum;
+
+      final remaining = (num.tryParse(_dashboardData?['remaining_budget']?.toString() ?? '') ?? fallbackRemaining).toDouble();
+      final allocated = (num.tryParse(_dashboardData?['total_allocated']?.toString() ?? '') ?? fallbackAllocated).toDouble();
+      final backendExpenses = (num.tryParse(_dashboardData?['total_expenses']?.toString() ?? '') ?? 0.0).toDouble();
+      final expenses = backendExpenses > 0 ? backendExpenses : activeExpensesSum;
+      final users = int.tryParse(_dashboardData?['total_users']?.toString() ?? '') ?? (usersList.isNotEmpty ? usersList.length : _allExpenses.map((e) => e.userName).toSet().length);
+      final overBudget = int.tryParse(_dashboardData?['over_budget']?.toString() ?? '') ?? usersList.where((u) => u.remainingAmount < 0 && u.allocatedAmount > 0).length;
+      final isNegative = remaining < 0;
+
+      return RefreshIndicator(
         onRefresh: _loadDashboard,
         color: AppColors.primary,
         child: SingleChildScrollView(
@@ -1878,57 +1953,50 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              InkWell(
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),
-                borderRadius: BorderRadius.circular(12),
-                child: Padding(
-                  padding: const EdgeInsets.all(4.0),
-                  child: Row(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(100),
-                        child: Image.asset(
-                          'assets/images/founder_avatar.png',
-                          width: 46,
-                          height: 46,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => CircleAvatar(
-                            radius: 23,
-                            backgroundColor: AppColors.primaryLight,
-                            child: const Icon(Icons.person, color: AppColors.primary),
+              Expanded(
+                child: InkWell(
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4.0),
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(100),
+                          child: _buildAvatarImage(_profilePhotoUrl, size: 46),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Hello, ${_currentUser?.fullName.isNotEmpty == true ? _currentUser!.fullName : (_currentUser?.firstName.isNotEmpty == true ? _currentUser!.firstName : (_currentUser?.username.isNotEmpty == true ? _currentUser!.username : "Founder"))} 👋',
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1F2937),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Welcome back!',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Hello, ${_currentUser?.fullName.isNotEmpty == true ? _currentUser!.fullName : (_currentUser?.firstName.isNotEmpty == true ? _currentUser!.firstName : (_currentUser?.username.isNotEmpty == true ? _currentUser!.username : "Founder"))} 👋',
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF1F2937),
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Welcome back!',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade600,
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
+              const SizedBox(width: 8),
 
               // Month Filter Pill Dropdown
               _buildMonthDropdown(),
@@ -2168,9 +2236,38 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
         ],
       ),
     ),
-  ),
-);
-}
+  );
+    } catch (e, stack) {
+      debugPrint('Error in _buildFounderTab: $e\n$stack');
+      return RefreshIndicator(
+        onRefresh: _loadDashboard,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(height: 40),
+              const Icon(Icons.warning_amber_rounded, color: AppColors.primary, size: 48),
+              const SizedBox(height: 12),
+              const Text('Founder Dashboard Summary', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 8),
+              Text('Unable to render full breakdown: $e', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                onPressed: () {
+                  setState(() => _isLoading = true);
+                  _loadDashboard();
+                },
+                child: const Text('Refresh Dashboard', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+  }
 
   String get _currentRouteName {
     switch (_currentIndex) {
@@ -2222,69 +2319,37 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    ErrorWidget.builder = (FlutterErrorDetails details) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.warning_amber_rounded, color: Colors.deepOrange, size: 48),
-              const SizedBox(height: 12),
-              Text(
-                'Dashboard Rendering Notice:\n${details.exception}',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.deepOrange, fontWeight: FontWeight.bold, fontSize: 13),
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                onPressed: () {
-                  setState(() => _isLoading = true);
-                  _loadDashboard();
-                },
-                child: const Text('Reload Dashboard'),
-              ),
-            ],
-          ),
-        ),
-      );
-    };
-
-    Widget activeScreen;
+  Widget _buildActiveTab() {
     switch (_currentIndex) {
       case 0:
-        activeScreen = _buildFounderTabSafe();
-        break;
+        return _buildFounderTabSafe();
       case 1:
-        activeScreen = UsersScreen(onBackPressed: () {
+        return UsersScreen(onBackPressed: () {
           setState(() => _currentIndex = 0);
           _loadDashboard();
         });
-        break;
       case 2:
-        activeScreen = AllocateBudgetScreen(onBackPressed: () {
+        return AllocateBudgetScreen(onBackPressed: () {
           setState(() => _currentIndex = 0);
           _loadDashboard();
         });
-        break;
       case 3:
-        activeScreen = MyExpensesScreen(onBackPressed: () {
+        return MyExpensesScreen(onBackPressed: () {
           setState(() => _currentIndex = 0);
           _loadDashboard();
         });
-        break;
       case 4:
-        activeScreen = ReportsScreen(onBackPressed: () {
+        return ReportsScreen(onBackPressed: () {
           setState(() => _currentIndex = 0);
           _loadDashboard();
         });
-        break;
       default:
-        activeScreen = _buildFounderTabSafe();
+        return _buildFounderTabSafe();
     }
+  }
 
+  @override
+  Widget build(BuildContext context) {
     return PopScope(
       canPop: _currentIndex == 0,
       onPopInvokedWithResult: (didPop, result) {
@@ -2309,7 +2374,7 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
               )
             : null,
         floatingActionButton: null,
-        body: activeScreen,
+        body: _buildActiveTab(),
         bottomNavigationBar: _buildCustomBottomNavBar(),
       ),
     );

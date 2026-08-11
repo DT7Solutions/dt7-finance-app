@@ -23,7 +23,8 @@ class Role(models.Model):
 
 class UserProfile(models.Model):
     ROLE_CHOICES = (
-        ('ADMIN', 'Admin / Founder'),
+        ('FOUNDER', 'Founder'),
+        ('ADMIN', 'Admin'),
         ('EMPLOYEE', 'Employee'),
     )
 
@@ -147,7 +148,12 @@ from django.dispatch import receiver
 @receiver(post_save, sender=User)
 def create_or_update_user_profile(sender, instance, created, **kwargs):
     if created:
-        role = 'ADMIN' if (instance.is_superuser or instance.username in ['admin', 'founder']) else 'EMPLOYEE'
+        if instance.is_superuser or instance.username.lower() in ['founder', 'diya', 'diya_founder']:
+            role = 'FOUNDER'
+        elif instance.is_staff or instance.username.lower() in ['admin', 'admin2']:
+            role = 'ADMIN'
+        else:
+            role = 'EMPLOYEE'
         UserProfile.objects.get_or_create(user=instance, defaults={'role': role})
     else:
         if hasattr(instance, 'profile'):
