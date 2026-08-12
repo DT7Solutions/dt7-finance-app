@@ -24,7 +24,7 @@ class ExpenseModel {
     this.userName = '',
     this.description = '',
     required this.dateTime,
-    this.status = 'PENDING',
+    this.status = 'APPROVED',
     this.paymentMode = 'Cash',
     this.receiptImage,
     this.approvedBy = '',
@@ -48,20 +48,17 @@ class ExpenseModel {
       if (json['user'] != null) {
         final u = json['user'];
         if (u is Map) {
-          return (u['username'] ?? u['full_name'] ?? u['first_name'] ?? u['email'] ?? '').toString();
+          if (u['username'] != null && u['username'].toString().trim().isNotEmpty) {
+            return u['username'].toString();
+          }
+          if (u['full_name'] != null && u['full_name'].toString().trim().isNotEmpty) {
+            return u['full_name'].toString();
+          }
         } else if (u is String && u.trim().isNotEmpty) {
-          return u;
+          return u.trim();
         }
       }
-      if (json['employee'] != null) {
-        final emp = json['employee'];
-        if (emp is Map) {
-          return (emp['username'] ?? emp['full_name'] ?? emp['first_name'] ?? emp['email'] ?? '').toString();
-        } else if (emp is String && emp.trim().isNotEmpty) {
-          return emp;
-        }
-      }
-      return '';
+      return 'General User';
     }
 
     return ExpenseModel(
@@ -74,7 +71,7 @@ class ExpenseModel {
       userName: extractUserName(json),
       description: json['description'] ?? json['note'] ?? '',
       dateTime: (json['date_time'] ?? json['created_at'] ?? json['date'] ?? '').toString(),
-      status: (json['status'] ?? 'PENDING').toString().toUpperCase(),
+      status: (json['status'] ?? 'APPROVED').toString().toUpperCase(),
       paymentMode: json['payment_mode'] ?? 'Cash',
       receiptImage: json['receipt_image'] ?? json['receipt'] ?? json['bill_image'],
       approvedBy: (json['approved_by'] ?? json['reviewed_by'] ?? '').toString(),

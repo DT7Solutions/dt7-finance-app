@@ -616,24 +616,9 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
                             style: const TextStyle(fontSize: 11),
                             overflow: TextOverflow.ellipsis,
                           ),
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                '₹${exp.amount.toStringAsFixed(0)}',
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                exp.status,
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: exp.isApproved ? AppColors.approvedGreen : (exp.isPending ? Colors.orange : Colors.red),
-                                ),
-                              ),
-                            ],
+                          trailing: Text(
+                            '₹${exp.amount.toStringAsFixed(0)}',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
                           ),
                         ),
                       );

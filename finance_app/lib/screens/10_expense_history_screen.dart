@@ -132,28 +132,7 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
                           );
                         }).toList(),
                       ),
-                      const SizedBox(height: 16),
-                      const Text('Status:', style: TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        children: ['All', 'APPROVED', 'PENDING', 'REJECTED'].map((st) {
-                          final isSel = _statusFilter == st;
-                          return ChoiceChip(
-                            label: Text(st),
-                            selected: isSel,
-                            selectedColor: AppColors.primaryLight,
-                            labelStyle: TextStyle(
-                              color: isSel ? AppColors.primary : Colors.black87,
-                              fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-                            ),
-                            onSelected: (val) {
-                              setSheetState(() => _statusFilter = st);
-                              setState(() => _statusFilter = st);
-                            },
-                          );
-                        }).toList(),
-                      ),
+
                       const SizedBox(height: 20),
                       SizedBox(
                         width: double.infinity,
@@ -374,16 +353,9 @@ class _ExpenseHistoryScreenState extends State<ExpenseHistoryScreen> {
                                         ),
                                       ),
                                       const SizedBox(width: 12),
-                                      Column(
-                                        crossAxisAlignment: CrossAxisAlignment.end,
-                                        children: [
-                                          Text(
-                                            '₹${item.amount.toStringAsFixed(0)}',
-                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          StatusBadge(status: item.status),
-                                        ],
+                                      Text(
+                                        '₹${item.amount.toStringAsFixed(0)}',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF111827)),
                                       ),
                                     ],
                                   ),

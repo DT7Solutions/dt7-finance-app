@@ -3,6 +3,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.core.mail import send_mail
 from rest_framework import viewsets, generics, permissions, status
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.contrib.auth.models import User
@@ -538,6 +539,9 @@ class ExpenseViewSet(viewsets.ModelViewSet):
             if user_obj:
                 data['user'] = user_obj.id
 
+        if 'status' not in data:
+            data['status'] = 'APPROVED'
+
         serializer = self.get_serializer(data=data)
         if not serializer.is_valid():
             print("ExpenseSerializer Errors:", serializer.errors)
@@ -586,7 +590,8 @@ class ExpenseViewSet(viewsets.ModelViewSet):
 
         expense = serializer.save(
             user=serializer.validated_data.get('user') or user,
-            category=category_obj or serializer.validated_data.get('category')
+            category=category_obj or serializer.validated_data.get('category'),
+            status=serializer.validated_data.get('status') or 'APPROVED'
         )
         if user:
             ActivityLog.objects.create(
@@ -660,36 +665,108 @@ class BudgetRequestViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(br)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-    def perform_create(self, serializer):
-        user = None
-        if self.request.user and self.request.user.is_authenticated:
-            user = self.request.user
-        else:
-            uname = self.request.data.get('user_name') or self.request.data.get('username') or self.request.data.get('user')
-            if uname:
-                user = User.objects.filter(Q(username__iexact=str(uname)) | Q(first_name__iexact=str(uname))).first()
-        if not user:
-            user = User.objects.filter(is_superuser=True).first() or User.objects.first()
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        old_status = instance.status
+        data = request.data.copy()
 
-        br = serializer.save(user=user)
-        if user:
-            ActivityLog.objects.create(
-                user=user,
-                title=f'Budget request submitted by {user.username}',
-                description=f'Requested ₹{br.request_amount} for {br.category.name if br.category else "Budget"}'
+        serializer = self.get_serializer(instance, data=data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        br = serializer.save()
+
+        new_status_raw = data.get('status') or data.get('action')
+        if new_status_raw:
+            new_status = 'APPROVED' if str(new_status_raw).upper() in ['APPROVED', 'APPROVE'] else 'REJECTED'
+            br.status = new_status
+            br.save()
+
+        if br.status == 'APPROVED' and old_status != 'APPROVED':
+            admin_user = request.user if (request.user and request.user.is_authenticated) else User.objects.filter(is_superuser=True).first() or User.objects.first()
+            BudgetAllocation.objects.create(
+                employee=br.user,
+                allocated_amount=br.request_amount,
+                note=f'Approved from Budget Request: {br.reason}',
+                allocated_by=admin_user
             )
+            if hasattr(br.user, 'profile'):
+                total_sum = BudgetAllocation.objects.filter(employee=br.user).aggregate(t=Sum('allocated_amount'))['t'] or 0.0
+                br.user.profile.allocated_budget = float(total_sum)
+                br.user.profile.save()
+
+        return Response(self.get_serializer(br).data)
+
+    @action(detail=True, methods=['post', 'patch', 'get'])
+    def approve(self, request, pk=None):
+        br = self.get_object()
+        old_status = br.status
+        br.status = 'APPROVED'
+        br.save()
+
+        if old_status != 'APPROVED':
+            admin_user = request.user if (request.user and request.user.is_authenticated) else User.objects.filter(is_superuser=True).first() or User.objects.first()
+            BudgetAllocation.objects.create(
+                employee=br.user,
+                allocated_amount=br.request_amount,
+                note=f'Approved from Budget Request: {br.reason}',
+                allocated_by=admin_user
+            )
+            if hasattr(br.user, 'profile'):
+                total_sum = BudgetAllocation.objects.filter(employee=br.user).aggregate(t=Sum('allocated_amount'))['t'] or 0.0
+                br.user.profile.allocated_budget = float(total_sum)
+                br.user.profile.save()
+
+        return Response({'status': 'success', 'new_status': 'APPROVED', 'data': self.get_serializer(br).data})
+
+    @action(detail=True, methods=['post', 'patch', 'get'])
+    def reject(self, request, pk=None):
+        br = self.get_object()
+        br.status = 'REJECTED'
+        br.save()
+        return Response({'status': 'success', 'new_status': 'REJECTED', 'data': self.get_serializer(br).data})
 
 
 class ApprovalActionView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request, pk=None):
-        item_type = request.data.get('type', 'expense')
-        action = request.data.get('action', 'approve')
-        new_status = 'APPROVED' if action in ['approve', 'APPROVED'] else 'REJECTED'
+        item_type = str(request.data.get('type') or '').lower()
+        action = str(request.data.get('action') or request.data.get('status') or 'approve').lower()
+        new_status = 'APPROVED' if action in ['approve', 'approved'] else 'REJECTED'
         user = request.user if (request.user and request.user.is_authenticated) else User.objects.filter(is_superuser=True).first() or User.objects.first()
 
-        if item_type == 'expense':
+        # Handle Budget Request Approval
+        if item_type in ['budget_request', 'budget', 'budgetrequest'] or BudgetRequest.objects.filter(pk=pk).exists():
+            try:
+                br = BudgetRequest.objects.get(pk=pk)
+                old_status = br.status
+                br.status = new_status
+                br.save()
+
+                if new_status == 'APPROVED' and old_status != 'APPROVED':
+                    admin_user = user or User.objects.filter(is_superuser=True).first() or User.objects.first()
+                    BudgetAllocation.objects.create(
+                        employee=br.user,
+                        allocated_amount=br.request_amount,
+                        note=f'Approved from Budget Request: {br.reason}',
+                        allocated_by=admin_user
+                    )
+                    if hasattr(br.user, 'profile'):
+                        total_sum = BudgetAllocation.objects.filter(employee=br.user).aggregate(t=Sum('allocated_amount'))['t'] or 0.0
+                        br.user.profile.allocated_budget = float(total_sum)
+                        br.user.profile.save()
+
+                if user:
+                    ActivityLog.objects.create(
+                        user=user,
+                        title=f'Budget request {new_status}',
+                        description=f'Budget request ₹{br.request_amount} for {br.user.username}'
+                    )
+                return Response({'status': 'success', 'new_status': br.status})
+            except BudgetRequest.DoesNotExist:
+                pass
+
+        if item_type == 'expense' or Expense.objects.filter(pk=pk).exists():
             try:
                 expense = Expense.objects.get(pk=pk)
                 expense.status = new_status
@@ -706,31 +783,6 @@ class ApprovalActionView(APIView):
                 return Response({'status': 'success', 'new_status': expense.status})
             except Expense.DoesNotExist:
                 return Response({'error': 'Expense not found'}, status=status.HTTP_404_NOT_FOUND)
-
-        elif item_type == 'budget_request':
-            try:
-                br = BudgetRequest.objects.get(pk=pk)
-                br.status = new_status
-                br.save()
-
-                if action in ['approve', 'APPROVED']:
-                    admin_user = user or User.objects.filter(is_superuser=True).first() or User.objects.first()
-                    BudgetAllocation.objects.create(
-                        employee=br.user,
-                        allocated_amount=br.request_amount,
-                        note=f'Approved from Budget Request: {br.reason}',
-                        allocated_by=admin_user
-                    )
-
-                if user:
-                    ActivityLog.objects.create(
-                        user=user,
-                        title=f'Budget request {new_status}',
-                        description=f'Budget request ₹{br.request_amount} for {br.user.username}'
-                    )
-                return Response({'status': 'success', 'new_status': br.status})
-            except BudgetRequest.DoesNotExist:
-                return Response({'error': 'Budget Request not found'}, status=status.HTTP_404_NOT_FOUND)
 
         return Response({'error': 'Invalid request parameters'}, status=status.HTTP_400_BAD_REQUEST)
 

@@ -27,6 +27,9 @@ void main() {
       expect(refreshedExpenses.length, equals(initialCount + 1));
       expect(refreshedExpenses.first.title, equals('Test Client Transport'));
       expect(refreshedExpenses.first.amount, equals(850.0));
+      expect(refreshedExpenses.first.status, equals('APPROVED'));
+      expect(refreshedExpenses.first.isApproved, isTrue);
+      expect(refreshedExpenses.first.isPending, isFalse);
     });
 
     test('Updating expense updates local persistence', () async {

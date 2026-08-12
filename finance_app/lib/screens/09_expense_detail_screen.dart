@@ -337,8 +337,6 @@ class _ExpenseDetailScreenState extends State<ExpenseDetailScreen> {
                         color: Colors.white,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    StatusBadge(status: _currentExpense.status),
                     const SizedBox(height: 16),
                     Text(
                       '₹${_currentExpense.amount.toStringAsFixed(0)}',
@@ -400,23 +398,6 @@ class _ExpenseDetailScreenState extends State<ExpenseDetailScreen> {
                       label: 'Claimed By',
                       value: _currentExpense.userName.isNotEmpty ? _currentExpense.userName : 'Employee User',
                     ),
-                    if (_currentExpense.approvedBy.isNotEmpty) ...[
-                      const Divider(height: 24),
-                      _DetailRow(
-                        icon: Icons.admin_panel_settings_outlined,
-                        label: 'Approved By',
-                        value: _currentExpense.approvedBy,
-                        badgeColor: AppColors.approvedGreen,
-                      ),
-                    ],
-                    if (_currentExpense.approvalDate.isNotEmpty) ...[
-                      const Divider(height: 24),
-                      _DetailRow(
-                        icon: Icons.event_available_outlined,
-                        label: 'Approval Date',
-                        value: _currentExpense.approvalDate,
-                      ),
-                    ],
                     const Divider(height: 24),
                     _DetailRow(
                       icon: Icons.notes_rounded,

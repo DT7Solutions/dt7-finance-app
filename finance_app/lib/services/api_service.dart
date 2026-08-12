@@ -806,7 +806,7 @@ class ApiService {
             'user_name': expUser,
             'date_time': dateTime ?? DateTime.now().toIso8601String(),
             'description': note ?? description ?? '',
-            'status': 'PENDING',
+            'status': 'APPROVED',
             if (receiptPath != null) 'receipt_image': receiptPath,
           }),
         ).timeout(const Duration(seconds: 8));
@@ -835,7 +835,7 @@ class ApiService {
       categoryId: categoryId,
       categoryName: catName,
       dateTime: dateTime ?? date ?? dateStr,
-      status: 'PENDING',
+      status: 'APPROVED',
       description: note ?? description ?? '',
       userName: expUser,
       receiptImage: receiptPath,
@@ -845,7 +845,6 @@ class ApiService {
     _storedExpenses.insert(0, newExp);
     await _saveExpensesToPrefs();
 
-    // Note: Used budget is ONLY updated when expense status is APPROVED by admin.
     return true;
   }
 
@@ -1152,17 +1151,9 @@ class ApiService {
       );
       await _saveBudgetRequestsToPrefs();
 
-      if (status == 'APPROVED') {
+      if (status.toUpperCase() == 'APPROVED') {
         final users = await getUsers();
-        final userIdx = users.indexWhere((u) => isExpenseOwnedByUser(ExpenseModel(
-          id: 0,
-          title: '',
-          amount: 0,
-          categoryId: 0,
-          categoryName: '',
-          userName: existing.userName,
-          dateTime: '',
-        ), u));
+        final userIdx = users.indexWhere((u) => isBudgetRequestOwnedByUser(existing, u));
 
         if (userIdx != -1) {
           final targetUser = users[userIdx];
@@ -1176,20 +1167,34 @@ class ApiService {
       }
     }
 
+    final isApproved = status.toUpperCase() == 'APPROVED';
+    final actionStr = isApproved ? 'approve' : 'reject';
+
     for (final hostUrl in AuthService.candidateBaseUrls) {
       final urlAction = Uri.parse('$hostUrl/approvals/$requestId/action/');
       final urlReq = Uri.parse('$hostUrl/budget-requests/$requestId/');
+      final urlCustomAction = Uri.parse('$hostUrl/budget-requests/$requestId/$actionStr/');
+
       try {
         await http.post(
           urlAction,
           headers: await _getHeaders(),
-          body: jsonEncode({'action': status.toLowerCase(), 'type': 'budget_request'}),
+          body: jsonEncode({
+            'action': actionStr,
+            'type': 'budget_request',
+            'status': status.toUpperCase(),
+          }),
+        ).timeout(const Duration(seconds: 8));
+
+        await http.post(
+          urlCustomAction,
+          headers: await _getHeaders(),
         ).timeout(const Duration(seconds: 8));
 
         await http.patch(
           urlReq,
           headers: await _getHeaders(),
-          body: jsonEncode({'status': status}),
+          body: jsonEncode({'status': status.toUpperCase()}),
         ).timeout(const Duration(seconds: 8));
       } catch (_) {}
     }

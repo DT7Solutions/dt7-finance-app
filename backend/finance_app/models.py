@@ -94,7 +94,7 @@ class Expense(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='expenses')
     description = models.TextField(blank=True, null=True)
     date_time = models.DateTimeField()
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='APPROVED')
     payment_mode = models.CharField(max_length=50, default='Cash')
     receipt_image = models.CharField(max_length=255, blank=True, null=True)
     approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='expenses_approved')

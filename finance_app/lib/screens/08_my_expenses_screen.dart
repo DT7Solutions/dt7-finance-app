@@ -349,28 +349,7 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
                           );
                         }).toList(),
                       ),
-                      const SizedBox(height: 16),
-                      const Text('Status:', style: TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        children: ['All', 'APPROVED', 'PENDING', 'REJECTED'].map((st) {
-                          final isSel = _statusFilter == st;
-                          return ChoiceChip(
-                            label: Text(st),
-                            selected: isSel,
-                            selectedColor: AppColors.primaryLight,
-                            labelStyle: TextStyle(
-                              color: isSel ? AppColors.primary : Colors.black87,
-                              fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-                            ),
-                            onSelected: (val) {
-                              setSheetState(() => _statusFilter = st);
-                              setState(() => _statusFilter = st);
-                            },
-                          );
-                        }).toList(),
-                      ),
+
                       const SizedBox(height: 20),
                       SizedBox(
                         width: double.infinity,
@@ -643,8 +622,6 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
                                           Row(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              StatusBadge(status: exp.status),
-                                              const SizedBox(width: 4),
                                               IconButton(
                                                 icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.primary),
                                                 onPressed: () => _showEditExpenseSheet(context, exp),
@@ -1207,8 +1184,7 @@ class _MyExpensesScreenState extends State<MyExpensesScreen> {
                                                           Column(
                                                             crossAxisAlignment: CrossAxisAlignment.end,
                                                             children: [
-                                                              Text('₹${exp.amount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                                              StatusBadge(status: exp.status),
+                                                              Text('₹${exp.amount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF111827))),
                                                             ],
                                                           ),
                                                         ],
