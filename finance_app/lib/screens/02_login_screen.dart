@@ -22,6 +22,32 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   String? _errorMessage;
 
+  @override
+  void initState() {
+    super.initState();
+    _checkExistingSession();
+  }
+
+  Future<void> _checkExistingSession() async {
+    final isAuth = await AuthService.isAuthenticated();
+    final username = await AuthService.getCurrentUsername();
+    if (isAuth && username.isNotEmpty && mounted) {
+      final role = await AuthService.getUserRole();
+      if (!mounted) return;
+      if (role == 'FOUNDER' || role == 'ADMIN') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const FounderDashboardScreen()),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const EmployeeDashboardScreen()),
+        );
+      }
+    }
+  }
+
   Future<void> _handleLogin() async {
     final input = _emailController.text.trim();
     final password = _passwordController.text.trim();

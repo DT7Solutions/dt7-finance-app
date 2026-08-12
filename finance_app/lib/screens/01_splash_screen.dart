@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import '../theme/app_theme.dart';
+import '../services/auth_service.dart';
 import '../widgets/app_logo.dart';
 import '02_login_screen.dart';
+import '03_dashboard_screen.dart';
+import '06_employee_dashboard_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -13,6 +16,8 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
+  bool _navigated = false;
+  Timer? _sessionTimer;
 
   @override
   void initState() {
@@ -23,6 +28,33 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     );
     _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeIn);
     _animController.forward();
+    _sessionTimer = Timer(const Duration(milliseconds: 1000), () {
+      _checkExistingSession();
+    });
+  }
+
+  Future<void> _checkExistingSession() async {
+    if (!mounted || _navigated) return;
+
+    final isAuth = await AuthService.isAuthenticated();
+    final username = await AuthService.getCurrentUsername();
+
+    if (isAuth && username.isNotEmpty && mounted && !_navigated) {
+      _navigated = true;
+      final role = await AuthService.getUserRole();
+      if (!mounted) return;
+      if (role == 'FOUNDER' || role == 'ADMIN') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const FounderDashboardScreen()),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const EmployeeDashboardScreen()),
+        );
+      }
+    }
   }
 
   @override
@@ -34,15 +66,38 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
   @override
   void dispose() {
+    _sessionTimer?.cancel();
     _animController.dispose();
     super.dispose();
   }
 
-  void _navigateToLogin() {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const LoginScreen()),
-    );
+  Future<void> _navigateToNext() async {
+    if (_navigated || !mounted) return;
+    _navigated = true;
+
+    final isAuth = await AuthService.isAuthenticated();
+    final username = await AuthService.getCurrentUsername();
+
+    if (isAuth && username.isNotEmpty && mounted) {
+      final role = await AuthService.getUserRole();
+      if (!mounted) return;
+      if (role == 'FOUNDER' || role == 'ADMIN') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const FounderDashboardScreen()),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const EmployeeDashboardScreen()),
+        );
+      }
+    } else if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+    }
   }
 
   @override
@@ -50,7 +105,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     return Scaffold(
       backgroundColor: const Color(0xFFFFFBF8),
       body: GestureDetector(
-        onTap: _navigateToLogin,
+        onTap: _navigateToNext,
         behavior: HitTestBehavior.opaque,
         child: SafeArea(
           child: FadeTransition(
@@ -112,7 +167,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                       width: double.infinity,
                       height: 52,
                       child: ElevatedButton(
-                        onPressed: _navigateToLogin,
+                        onPressed: _navigateToNext,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFFF5000),
                           foregroundColor: Colors.white,

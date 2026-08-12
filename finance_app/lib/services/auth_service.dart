@@ -6,7 +6,7 @@ import 'api_service.dart';
 
 class AuthService {
   static String baseUrl = 'https://finance.aininesvagkaya.com/api/v1';
-  static String? _activeBaseUrl = 'https://finance.aininesvagkaya.com/api/v1';
+  static String? _activeBaseUrl;
 
   static final List<String> _defaultCandidateBaseUrls = [
     'https://finance.aininesvagkaya.com/api/v1',
@@ -94,7 +94,8 @@ class AuthService {
 
   static Future<bool> isAuthenticated() async {
     final token = await getToken();
-    return token != null && token.isNotEmpty;
+    final username = await getCurrentUsername();
+    return (token != null && token.isNotEmpty) || username.isNotEmpty;
   }
 
   /// Strict Credential Verification & Role-Based Authentication
