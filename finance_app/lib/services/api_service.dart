@@ -78,8 +78,7 @@ class ApiService {
     for (final hostUrl in AuthService.candidateUrls) {
       final url = Uri.parse('$hostUrl/users/');
       try {
-        final timeoutMs = AuthService.hasActiveBaseUrl ? 2000 : 400;
-        final response = await http.get(url, headers: await _getHeaders()).timeout(Duration(milliseconds: timeoutMs));
+        final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(seconds: 8));
         if (response.statusCode == 200) {
           AuthService.setActiveBaseUrl(hostUrl);
           final data = jsonDecode(response.body);
@@ -275,7 +274,7 @@ class ApiService {
             'role': role,
             'initial_allocated_amount': allocatedAmount,
           }),
-        ).timeout(Duration(milliseconds: AuthService.hasActiveBaseUrl ? 2000 : 200));
+        ).timeout(const Duration(seconds: 8));
         if (response.statusCode == 201 || response.statusCode == 200) {
           await getUsers(); // Refresh user list from backend
           return true;
@@ -393,7 +392,7 @@ class ApiService {
     for (final hostUrl in AuthService.candidateUrls) {
       final url = Uri.parse('$hostUrl/roles/');
       try {
-        final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 1500));
+        final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(seconds: 8));
         if (response.statusCode == 200) {
           AuthService.setActiveBaseUrl(hostUrl);
           final data = jsonDecode(response.body);
@@ -415,7 +414,7 @@ class ApiService {
           url,
           headers: await _getHeaders(),
           body: jsonEncode(role.toJson()),
-        ).timeout(const Duration(milliseconds: 2000));
+        ).timeout(const Duration(seconds: 8));
         if (response.statusCode == 201 || response.statusCode == 200) {
           return true;
         }
@@ -432,7 +431,7 @@ class ApiService {
           url,
           headers: await _getHeaders(),
           body: jsonEncode(role.toJson()),
-        ).timeout(const Duration(milliseconds: 2000));
+        ).timeout(const Duration(seconds: 8));
         if (response.statusCode == 200) {
           return true;
         }
@@ -445,7 +444,7 @@ class ApiService {
     for (final hostUrl in AuthService.candidateUrls) {
       final url = Uri.parse('$hostUrl/roles/$roleId/');
       try {
-        final response = await http.delete(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 1500));
+        final response = await http.delete(url, headers: await _getHeaders()).timeout(const Duration(seconds: 8));
         if (response.statusCode == 200 || response.statusCode == 204) {
           return true;
         }
@@ -480,7 +479,7 @@ class ApiService {
             'allocated_amount': allocatedAmount,
             if (password != null && password.trim().isNotEmpty) 'password': password.trim(),
           }),
-        ).timeout(const Duration(milliseconds: 2000));
+        ).timeout(const Duration(seconds: 8));
         if (response.statusCode == 200) {
           await getUsers();
           return true;
@@ -519,7 +518,7 @@ class ApiService {
     for (final hostUrl in AuthService.candidateUrls) {
       final url = Uri.parse('$hostUrl/users/$userId/');
       try {
-        final response = await http.delete(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 1000));
+        final response = await http.delete(url, headers: await _getHeaders()).timeout(const Duration(seconds: 8));
         if (response.statusCode == 200 || response.statusCode == 204) {
           AuthService.setActiveBaseUrl(hostUrl);
           break;
@@ -551,7 +550,7 @@ class ApiService {
     for (final hostUrl in AuthService.candidateUrls) {
       final url = Uri.parse('$hostUrl/categories/');
       try {
-        final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 500));
+        final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(seconds: 8));
         if (response.statusCode == 200) {
           AuthService.setActiveBaseUrl(hostUrl);
           final data = jsonDecode(response.body);
@@ -623,7 +622,7 @@ class ApiService {
             'allocated_amount': incrementalAmount,
             'note': note ?? '',
           }),
-        ).timeout(const Duration(milliseconds: 2000));
+        ).timeout(const Duration(seconds: 8));
         if (resp.statusCode == 201 || resp.statusCode == 200) {
           AuthService.setActiveBaseUrl(hostUrl);
         }
@@ -640,7 +639,7 @@ class ApiService {
           body: jsonEncode({
             'allocated_amount': targetTotal,
           }),
-        ).timeout(const Duration(milliseconds: 2000));
+        ).timeout(const Duration(seconds: 8));
         if (response.statusCode == 200) {
           AuthService.setActiveBaseUrl(hostUrl);
           await getUsers(); // Reload updated users list directly from PostgreSQL
@@ -716,7 +715,7 @@ class ApiService {
     for (final hostUrl in AuthService.candidateUrls) {
       final url = Uri.parse('$hostUrl/expenses/');
       try {
-        final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 500));
+        final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(seconds: 8));
         if (response.statusCode == 200) {
           AuthService.setActiveBaseUrl(hostUrl);
           final data = jsonDecode(response.body);
@@ -807,7 +806,7 @@ class ApiService {
             'status': 'PENDING',
             if (receiptPath != null) 'receipt_image': receiptPath,
           }),
-        ).timeout(const Duration(milliseconds: 1000));
+        ).timeout(const Duration(seconds: 8));
 
         if (response.statusCode == 200 || response.statusCode == 201) {
           AuthService.setActiveBaseUrl(hostUrl);
@@ -929,7 +928,7 @@ class ApiService {
             if (status != null) 'reviewed_by': activeApprover,
             if (status != null) 'approval_date': activeDate,
           }),
-        ).timeout(const Duration(milliseconds: 1000));
+        ).timeout(const Duration(seconds: 8));
 
         if (response.statusCode == 200 || response.statusCode == 201) {
           AuthService.setActiveBaseUrl(hostUrl);
@@ -947,7 +946,7 @@ class ApiService {
     for (final hostUrl in AuthService.candidateUrls) {
       final url = Uri.parse('$hostUrl/expenses/$expenseId/');
       try {
-        final response = await http.delete(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 1000));
+        final response = await http.delete(url, headers: await _getHeaders()).timeout(const Duration(seconds: 8));
         if (response.statusCode == 200 || response.statusCode == 204) {
           AuthService.setActiveBaseUrl(hostUrl);
           break;
@@ -990,13 +989,13 @@ class ApiService {
           urlAction,
           headers: await _getHeaders(),
           body: jsonEncode({'action': action, 'type': type}),
-        ).timeout(const Duration(milliseconds: 1000));
+        ).timeout(const Duration(seconds: 8));
 
         final response = await http.patch(
           urlExpense,
           headers: await _getHeaders(),
           body: jsonEncode({'status': statusStr}),
-        ).timeout(const Duration(milliseconds: 1000));
+        ).timeout(const Duration(seconds: 8));
 
         if (response.statusCode == 200) {
           AuthService.setActiveBaseUrl(hostUrl);
@@ -1040,8 +1039,7 @@ class ApiService {
     for (final hostUrl in AuthService.candidateBaseUrls) {
       final url = Uri.parse('$hostUrl/budget-requests/');
       try {
-        final timeoutMs = AuthService.hasActiveBaseUrl ? 1500 : 400;
-        final response = await http.get(url, headers: await _getHeaders()).timeout(Duration(milliseconds: timeoutMs));
+        final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(seconds: 8));
         if (response.statusCode == 200) {
           AuthService.setActiveBaseUrl(hostUrl);
           final data = jsonDecode(response.body);
@@ -1114,7 +1112,7 @@ class ApiService {
             'reason': reason,
             'user_name': uName,
           }),
-        ).timeout(const Duration(milliseconds: 2000));
+        ).timeout(const Duration(seconds: 8));
         if (response.statusCode == 201 || response.statusCode == 200) {
           AuthService.setActiveBaseUrl(hostUrl);
           try {
@@ -1183,13 +1181,13 @@ class ApiService {
           urlAction,
           headers: await _getHeaders(),
           body: jsonEncode({'action': status.toLowerCase(), 'type': 'budget_request'}),
-        ).timeout(const Duration(milliseconds: 1000));
+        ).timeout(const Duration(seconds: 8));
 
         await http.patch(
           urlReq,
           headers: await _getHeaders(),
           body: jsonEncode({'status': status}),
-        ).timeout(const Duration(milliseconds: 1000));
+        ).timeout(const Duration(seconds: 8));
       } catch (_) {}
     }
     return true;
@@ -1201,7 +1199,7 @@ class ApiService {
       for (final hostUrl in AuthService.candidateBaseUrls) {
         final url = Uri.parse('$hostUrl/reports/');
         try {
-          final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 2000));
+          final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(seconds: 8));
           if (response.statusCode == 200) {
             return jsonDecode(response.body);
           }
@@ -1231,8 +1229,7 @@ class ApiService {
     for (final hostUrl in AuthService.candidateUrls) {
       final url = Uri.parse('$hostUrl/dashboard/founder/');
       try {
-        final timeoutMs = AuthService.hasActiveBaseUrl ? 1500 : 400;
-        final response = await http.get(url, headers: await _getHeaders()).timeout(Duration(milliseconds: timeoutMs));
+        final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(seconds: 8));
         if (response.statusCode == 200) {
           AuthService.setActiveBaseUrl(hostUrl);
           final data = jsonDecode(response.body);
@@ -1280,7 +1277,7 @@ class ApiService {
       for (final hostUrl in AuthService.candidateUrls) {
         final url = Uri.parse('$hostUrl/dashboards/employee/');
         try {
-          final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 500));
+          final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(seconds: 8));
           if (response.statusCode == 200) {
             AuthService.setActiveBaseUrl(hostUrl);
             return jsonDecode(response.body);
@@ -1305,7 +1302,7 @@ class ApiService {
     for (final hostUrl in AuthService.candidateBaseUrls) {
       final url = Uri.parse('$hostUrl/activity-logs/');
       try {
-        final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(milliseconds: 2000));
+        final response = await http.get(url, headers: await _getHeaders()).timeout(const Duration(seconds: 8));
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
           final results = data['results'] ?? data;

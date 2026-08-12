@@ -6,13 +6,10 @@ import 'api_service.dart';
 
 class AuthService {
   static String baseUrl = 'https://finance.aininesvagkaya.com/api/v1';
-  static String? _activeBaseUrl;
+  static String? _activeBaseUrl = 'https://finance.aininesvagkaya.com/api/v1';
 
   static final List<String> _defaultCandidateBaseUrls = [
     'https://finance.aininesvagkaya.com/api/v1',
-    'http://127.0.0.1:8000/api/v1',
-    'http://localhost:8000/api/v1',
-    'http://10.0.2.2:8000/api/v1',
   ];
 
   static List<String> get candidateUrls {
@@ -20,16 +17,6 @@ class AuthService {
     if (_activeBaseUrl != null && _activeBaseUrl!.isNotEmpty) {
       list.add(_activeBaseUrl!);
     }
-
-    try {
-      final host = Uri.base.host;
-      if (host.isNotEmpty && host != '0.0.0.0') {
-        final dynamicUrl = 'http://$host:8000/api/v1';
-        if (!list.contains(dynamicUrl)) {
-          list.add(dynamicUrl);
-        }
-      }
-    } catch (_) {}
 
     for (final u in _defaultCandidateBaseUrls) {
       if (!list.contains(u)) {
@@ -137,7 +124,7 @@ class AuthService {
               url,
               headers: {'Content-Type': 'application/json'},
               body: jsonEncode(payload),
-            ).timeout(Duration(milliseconds: _activeBaseUrl != null ? 1500 : 300));
+            ).timeout(const Duration(seconds: 8));
 
             if (response.statusCode == 200 || response.statusCode == 201) {
               serverResponded = true;
@@ -307,7 +294,7 @@ class AuthService {
             'first_name': firstName,
             'last_name': lastName,
           }),
-        ).timeout(const Duration(milliseconds: 2000));
+        ).timeout(const Duration(seconds: 8));
 
         if (response.statusCode == 201) {
           baseUrl = hostUrl;
@@ -331,7 +318,7 @@ class AuthService {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer $token',
           },
-        ).timeout(const Duration(milliseconds: 2000));
+        ).timeout(const Duration(seconds: 8));
 
         if (response.statusCode == 200) {
           baseUrl = hostUrl;
@@ -369,7 +356,7 @@ class AuthService {
             'old_password': oldPassword,
             'new_password': newPassword,
           }),
-        ).timeout(const Duration(milliseconds: 1000));
+        ).timeout(const Duration(seconds: 8));
 
         if (response.statusCode == 200) {
           setActiveBaseUrl(hostUrl);

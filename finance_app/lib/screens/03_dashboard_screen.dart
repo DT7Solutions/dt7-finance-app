@@ -278,11 +278,11 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
     try {
       await ApiService.ensureDataLoaded();
       final results = await Future.wait([
-        ApiService.getFounderDashboard().timeout(const Duration(milliseconds: 1500)).catchError((_) => null),
-        ApiService.getExpenses().timeout(const Duration(milliseconds: 1500)).catchError((_) => <ExpenseModel>[]),
-        ApiService.getBudgetRequests().timeout(const Duration(milliseconds: 1500)).catchError((_) => <BudgetRequestModel>[]),
-        ApiService.getCurrentUser().timeout(const Duration(milliseconds: 1500)).catchError((_) => null),
-        AuthService.getProfilePhoto().timeout(const Duration(milliseconds: 1500)).catchError((_) => null),
+        ApiService.getFounderDashboard().timeout(const Duration(seconds: 10)).catchError((_) => null),
+        ApiService.getExpenses().timeout(const Duration(seconds: 10)).catchError((_) => <ExpenseModel>[]),
+        ApiService.getBudgetRequests().timeout(const Duration(seconds: 10)).catchError((_) => <BudgetRequestModel>[]),
+        ApiService.getCurrentUser().timeout(const Duration(seconds: 10)).catchError((_) => null),
+        AuthService.getProfilePhoto().timeout(const Duration(seconds: 10)).catchError((_) => null),
       ]);
 
       if (mounted) {
