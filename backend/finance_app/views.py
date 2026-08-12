@@ -42,16 +42,22 @@ class SendOTPView(APIView):
             Q(email__iexact=clean_identifier) | Q(username__iexact=clean_identifier)
         ).first()
 
-        dest_email = ''
-        if user and user.email:
-            dest_email = user.email.strip()
-        elif '@' in clean_identifier:
-            dest_email = clean_identifier
+        if not user and '@' in clean_identifier:
+            # Fallback check if user email has surrounding whitespace or case difference
+            user = User.objects.filter(email__icontains=clean_identifier).first()
 
+        if not user:
+            return Response({
+                'error': f'No account found matching "{clean_identifier}". Please check your username or registered email.',
+                'success': False
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        dest_email = (user.email or '').strip()
         if not dest_email:
-            if user:
-                return Response({'error': f'No email address is linked to username "{user.username}". Please contact administrator.'}, status=status.HTTP_400_BAD_REQUEST)
-            return Response({'error': 'No account found with this email or username.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({
+                'error': f'No email address is associated with account "{user.username}". Please contact administrator.',
+                'success': False
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         # Generate secure 6-digit OTP
         otp_code = f"{random.randint(100000, 999999)}"

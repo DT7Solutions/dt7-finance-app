@@ -13,7 +13,14 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-dt7-finance-ap
 
 DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 't')
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
+raw_hosts = os.environ.get('ALLOWED_HOSTS', '*')
+if raw_hosts == '*' or '*' in raw_hosts:
+    ALLOWED_HOSTS = ['*']
+else:
+    ALLOWED_HOSTS = [h.strip() for h in raw_hosts.replace(',', ' ').split() if h.strip()]
+    if not ALLOWED_HOSTS:
+        ALLOWED_HOSTS = ['*']
+
 
 # Application definition
 INSTALLED_APPS = [

@@ -10,6 +10,9 @@ class AuthService {
 
   static final List<String> _defaultCandidateBaseUrls = [
     'https://finance.aininesvagkaya.com/api/v1',
+    'http://10.0.2.2:8000/api/v1',
+    'http://127.0.0.1:8000/api/v1',
+    'http://localhost:8000/api/v1',
   ];
 
   static List<String> get candidateUrls {
@@ -390,6 +393,7 @@ class AuthService {
 
     final endpoints = ['/auth/send-otp/', '/send-otp/'];
     bool serverResponded = false;
+    String lastErrorMessage = '';
 
     for (final hostUrl in candidateUrls) {
       for (final endpoint in endpoints) {
@@ -397,28 +401,35 @@ class AuthService {
           final url = Uri.parse('$hostUrl$endpoint');
           final response = await http.post(
             url,
-            headers: {'Content-Type': 'application/json'},
+            headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
             body: jsonEncode({'identifier': cleanInput, 'email': cleanInput}),
-          ).timeout(const Duration(seconds: 10));
+          ).timeout(const Duration(seconds: 8));
 
-          if (response.statusCode == 200) {
+          final bodyStr = response.body.trim();
+          final isJson = bodyStr.startsWith('{') && bodyStr.endsWith('}');
+
+          if (response.statusCode == 200 && isJson) {
             setActiveBaseUrl(hostUrl);
-            final data = jsonDecode(response.body);
+            final data = jsonDecode(bodyStr);
             return {
               'success': true,
               'message': data['message'] ?? 'OTP sent to your email successfully.',
               'email': data['email'] ?? cleanInput,
             };
-          } else if (response.statusCode == 400 || response.statusCode == 404) {
+          } else if ((response.statusCode == 400 || response.statusCode == 404) && isJson) {
             serverResponded = true;
-            final data = jsonDecode(response.body);
-            return {
-              'success': false,
-              'message': data['error'] ?? data['message'] ?? 'User not found with this email or username.',
-            };
+            final data = jsonDecode(bodyStr);
+            lastErrorMessage = data['error'] ?? data['message'] ?? 'User not found with this email or username.';
           }
         } catch (_) {}
       }
+    }
+
+    if (serverResponded && lastErrorMessage.isNotEmpty) {
+      return {
+        'success': false,
+        'message': lastErrorMessage,
+      };
     }
 
     // Local / Offline fallback for testing
@@ -440,7 +451,7 @@ class AuthService {
 
     return {
       'success': false,
-      'message': serverResponded ? 'Could not find an account with this identifier.' : 'Unable to connect to server. Please try again.',
+      'message': 'Unable to connect to server. Please check your network and try again.',
     };
   }
 
@@ -462,17 +473,20 @@ class AuthService {
           final url = Uri.parse('$hostUrl$endpoint');
           final response = await http.post(
             url,
-            headers: {'Content-Type': 'application/json'},
+            headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
             body: jsonEncode({
               'identifier': cleanInput,
               'email': cleanInput,
               'otp': cleanOtp,
             }),
-          ).timeout(const Duration(seconds: 10));
+          ).timeout(const Duration(seconds: 8));
 
-          if (response.statusCode == 200) {
+          final bodyStr = response.body.trim();
+          final isJson = bodyStr.startsWith('{') && bodyStr.endsWith('}');
+
+          if (response.statusCode == 200 && isJson) {
             setActiveBaseUrl(hostUrl);
-            final data = jsonDecode(response.body);
+            final data = jsonDecode(bodyStr);
             if (data is Map<String, dynamic>) {
               final access = data['access'] ?? data['token'];
               final refresh = data['refresh'] ?? '';
@@ -501,7 +515,7 @@ class AuthService {
                 return role;
               }
             }
-          } else if (response.statusCode == 400 || response.statusCode == 401) {
+          } else if ((response.statusCode == 400 || response.statusCode == 401) && isJson) {
             serverResponded = true;
           }
         } catch (_) {}
@@ -512,8 +526,8 @@ class AuthService {
       return null;
     }
 
-    // Local / Offline fallback verification
-    if (cleanOtp.length == 6) {
+    // Local / Offline fallback verification (allowed only for testing demo code 123456 when offline)
+    if (cleanOtp == '123456') {
       final lowerInput = cleanInput.toLowerCase();
       final users = await ApiService.getUsers();
       final matched = users.firstWhere(
