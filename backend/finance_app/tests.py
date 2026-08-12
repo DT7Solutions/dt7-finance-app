@@ -48,3 +48,38 @@ class DT7AgencyFinanceTests(TestCase):
         self.assertIn('total_allocated', response.data)
         self.assertIn('total_expenses', response.data)
         self.assertIn('category_breakdown', response.data)
+
+    def test_send_and_verify_otp(self):
+        # 1. Send OTP
+        anon_client = APIClient()
+        send_res = anon_client.post('/api/v1/auth/send-otp/', {
+            'identifier': 'john.doe@example.com'
+        })
+        self.assertEqual(send_res.status_code, status.HTTP_200_OK)
+        self.assertTrue(send_res.data.get('success'))
+
+        from .models import EmailOTP
+        otp_obj = EmailOTP.objects.filter(email='john.doe@example.com').first()
+        self.assertIsNotNone(otp_obj)
+        otp_code = otp_obj.otp
+        self.assertEqual(len(otp_code), 6)
+
+        # 2. Verify OTP with correct code
+        verify_res = anon_client.post('/api/v1/auth/verify-otp/', {
+            'identifier': 'johndoe',
+            'otp': otp_code
+        })
+        self.assertEqual(verify_res.status_code, status.HTTP_200_OK)
+        self.assertIn('access', verify_res.data)
+        self.assertEqual(verify_res.data.get('role'), 'EMPLOYEE')
+
+        otp_obj.refresh_from_db()
+        self.assertTrue(otp_obj.is_used)
+
+        # 3. Trying to reuse OTP should fail
+        reuse_res = anon_client.post('/api/v1/auth/verify-otp/', {
+            'identifier': 'johndoe',
+            'otp': otp_code
+        })
+        self.assertEqual(reuse_res.status_code, status.HTTP_400_BAD_REQUEST)
+

@@ -1,16 +1,217 @@
+import random
+from datetime import timedelta
+from django.conf import settings
+from django.core.mail import send_mail
 from rest_framework import viewsets, generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.contrib.auth.models import User
 from django.db.models import Sum, Q, F
 from django.utils import timezone
-from .models import UserProfile, Role, Category, BudgetAllocation, Expense, BudgetRequest, ActivityLog
+from rest_framework_simplejwt.tokens import RefreshToken
+from .models import UserProfile, Role, Category, BudgetAllocation, Expense, BudgetRequest, ActivityLog, EmailOTP
 from .serializers import (
     UserDetailSerializer, RoleSerializer, CategorySerializer, BudgetAllocationSerializer,
     ExpenseSerializer, BudgetRequestSerializer, ActivityLogSerializer
 )
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
+
+def _mask_email(email_str):
+    if not email_str or '@' not in email_str:
+        return email_str
+    parts = email_str.split('@')
+    name = parts[0]
+    domain = parts[1]
+    if len(name) <= 2:
+        masked_name = name[0] + '*'
+    else:
+        masked_name = name[:2] + '*' * (len(name) - 2)
+    return f"{masked_name}@{domain}"
+
+class SendOTPView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        identifier = request.data.get('email') or request.data.get('identifier') or request.data.get('username')
+        if not identifier:
+            return Response({'error': 'Email or username is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        clean_identifier = str(identifier).strip()
+        user = User.objects.filter(
+            Q(email__iexact=clean_identifier) | Q(username__iexact=clean_identifier)
+        ).first()
+
+        dest_email = ''
+        if user and user.email:
+            dest_email = user.email.strip()
+        elif '@' in clean_identifier:
+            dest_email = clean_identifier
+
+        if not dest_email:
+            if user:
+                return Response({'error': f'No email address is linked to username "{user.username}". Please contact administrator.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'No account found with this email or username.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Generate secure 6-digit OTP
+        otp_code = f"{random.randint(100000, 999999)}"
+        expires_at = timezone.now() + timedelta(minutes=10)
+
+        # Invalidate previous unverified OTPs for this email
+        EmailOTP.objects.filter(email__iexact=dest_email, is_used=False).update(is_used=True)
+
+        # Create new OTP record
+        EmailOTP.objects.create(
+            user=user,
+            email=dest_email,
+            otp=otp_code,
+            expires_at=expires_at,
+        )
+
+        # Build Branded Email
+        recipient_name = user.first_name if (user and user.first_name) else (user.username if user else 'Team Member')
+        subject = f"Your DT7 Finance Login OTP: {otp_code}"
+        
+        text_message = f"""Hello {recipient_name},
+
+Your one-time password (OTP) for logging in to DT7 Finance is:
+
+{otp_code}
+
+This code is valid for 10 minutes. Please do not share this OTP with anyone.
+
+Best regards,
+DT7 Finance Team
+"""
+
+        html_message = f"""
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f5f7; margin: 0; padding: 24px;">
+  <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 18px; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,0.08);">
+    <div style="background: linear-gradient(135deg, #FF5000, #FF7000); padding: 32px 24px; text-align: center; color: #ffffff;">
+      <h1 style="margin: 0; font-size: 26px; font-weight: 900; letter-spacing: 0.5px; color: #ffffff;">DT7 FINANCE</h1>
+      <p style="margin: 6px 0 0 0; font-size: 13px; opacity: 0.92; color: #ffffff;">One-Time Password Authentication</p>
+    </div>
+    <div style="padding: 32px 28px; text-align: center;">
+      <div style="font-size: 17px; color: #1f2937; margin-bottom: 12px; font-weight: 700;">Hello {recipient_name},</div>
+      <div style="font-size: 14px; color: #4b5563; line-height: 1.5; margin-bottom: 24px;">
+        Use the following one-time code to sign in to your DT7 Finance App account securely:
+      </div>
+      <div style="background: #FFF5EE; border: 2px dashed #FF5000; border-radius: 14px; padding: 20px 24px; margin: 0 auto 24px auto; display: inline-block;">
+        <div style="font-size: 36px; font-weight: 900; letter-spacing: 8px; color: #FF5000; margin: 0; font-family: monospace;">{otp_code}</div>
+        <div style="font-size: 12px; color: #888888; margin-top: 8px; font-weight: 500;">⏱ Valid for 10 minutes</div>
+      </div>
+      <div style="font-size: 12.5px; color: #6b7280; line-height: 1.4;">
+        If you did not request this login code, you can safely ignore this email.
+      </div>
+    </div>
+    <div style="background: #f9fafb; padding: 18px 24px; text-align: center; font-size: 12px; color: #9ca3af; border-top: 1px solid #f3f4f6;">
+      &copy; {timezone.now().year} DT7 Finance. All rights reserved.
+    </div>
+  </div>
+</body>
+</html>
+"""
+        
+        try:
+            print("email sending s")
+            send_mail(
+                subject=subject,
+                message=text_message,
+                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'DT7 Finance <npaulprasanakumar@gmail.com>'),
+                recipient_list=[dest_email],
+                html_message=html_message,
+                fail_silently=False,
+            )
+            masked = _mask_email(dest_email)
+            print("email sending end")
+            return Response({
+                'success': True,
+                'message': f'OTP sent successfully to {masked}',
+                'email': masked,
+                'identifier': clean_identifier,
+            }, status=status.HTTP_200_OK)
+           
+        except Exception as e:
+            return Response({
+                'error': f'Failed to send OTP email: {str(e)}',
+                'success': False
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class VerifyOTPView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        identifier = request.data.get('email') or request.data.get('identifier') or request.data.get('username')
+        otp = request.data.get('otp')
+
+        if not identifier or not otp:
+            return Response({'error': 'Email/username and OTP are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        clean_identifier = str(identifier).strip()
+        clean_otp = str(otp).strip()
+
+        # Find user
+        user = User.objects.filter(
+            Q(email__iexact=clean_identifier) | Q(username__iexact=clean_identifier)
+        ).first()
+
+        # Find active OTP
+        otp_query = Q(otp=clean_otp, is_used=False)
+        if user:
+            otp_query = otp_query & (Q(user=user) | Q(email__iexact=user.email) | Q(email__iexact=clean_identifier))
+        else:
+            otp_query = otp_query & Q(email__iexact=clean_identifier)
+
+        otp_record = EmailOTP.objects.filter(otp_query).order_by('-created_at').first()
+
+        if not otp_record:
+            return Response({'error': 'Invalid OTP code. Please check and try again.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not otp_record.is_valid():
+            return Response({'error': 'OTP has expired. Please request a new code.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Mark OTP as used
+        otp_record.is_used = True
+        otp_record.save()
+
+        # Resolve user
+        if not user:
+            user = otp_record.user or User.objects.filter(email__iexact=otp_record.email).first()
+
+        if not user:
+            return Response({'error': 'No registered user profile found for this email.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Generate JWT Token
+        refresh = RefreshToken.for_user(user)
+        access_token = str(refresh.access_token)
+
+        # Determine Role
+        role = 'EMPLOYEE'
+        if hasattr(user, 'profile') and user.profile.role:
+            role = user.profile.role.upper()
+        if user.is_superuser or user.username.lower() in ['founder', 'diya', 'diya_founder']:
+            role = 'FOUNDER'
+        elif user.is_staff or user.username.lower() in ['admin', 'admin2']:
+            role = 'ADMIN'
+
+        return Response({
+            'success': True,
+            'access': access_token,
+            'refresh': str(refresh),
+            'token': access_token,
+            'role': role,
+            'user': UserDetailSerializer(user).data,
+            'is_superuser': user.is_superuser,
+            'is_staff': user.is_staff,
+        }, status=status.HTTP_200_OK)
+
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
@@ -37,6 +238,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
 class RoleViewSet(viewsets.ModelViewSet):
+
     permission_classes = [permissions.AllowAny]
     serializer_class = RoleSerializer
     queryset = Role.objects.all()

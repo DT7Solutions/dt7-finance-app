@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
-from .models import UserProfile, Category, BudgetAllocation, Expense, BudgetRequest, ActivityLog
+from .models import UserProfile, Category, BudgetAllocation, Expense, BudgetRequest, ActivityLog, EmailOTP
 
 class UserProfileInline(admin.StackedInline):
     model = UserProfile
@@ -59,3 +59,16 @@ class BudgetRequestAdmin(admin.ModelAdmin):
 class ActivityLogAdmin(admin.ModelAdmin):
     list_display = ('title', 'user', 'timestamp', 'log_type')
     search_fields = ('title', 'user__username')
+
+@admin.register(EmailOTP)
+class EmailOTPAdmin(admin.ModelAdmin):
+    list_display = ('email', 'user', 'otp', 'is_used', 'is_valid_status', 'created_at', 'expires_at')
+    list_filter = ('is_used', 'created_at')
+    search_fields = ('email', 'otp', 'user__username')
+    readonly_fields = ('created_at',)
+    ordering = ('-created_at',)
+
+    @admin.display(description='Active / Valid', boolean=True)
+    def is_valid_status(self, obj):
+        return obj.is_valid()
+

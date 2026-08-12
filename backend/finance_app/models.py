@@ -142,6 +142,25 @@ class ActivityLog(models.Model):
         return f"{self.title} - {self.timestamp.strftime('%d %b %Y, %I:%M %p')}"
 
 
+class EmailOTP(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='otps')
+    email = models.EmailField(max_length=255)
+    otp = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def is_valid(self):
+        from django.utils import timezone
+        return not self.is_used and timezone.now() <= self.expires_at
+
+    def __str__(self):
+        return f"OTP for {self.email} ({'Used' if self.is_used else 'Active'})"
+
+
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
@@ -158,4 +177,5 @@ def create_or_update_user_profile(sender, instance, created, **kwargs):
     else:
         if hasattr(instance, 'profile'):
             instance.profile.save()
+
 

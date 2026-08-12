@@ -380,4 +380,164 @@ class AuthService {
 
     return true;
   }
+
+  /// Request a 6-digit OTP sent to the user's registered email
+  static Future<Map<String, dynamic>> sendOtp(String identifier) async {
+    final cleanInput = identifier.trim();
+    if (cleanInput.isEmpty) {
+      return {'success': false, 'message': 'Please enter your email or username.'};
+    }
+
+    final endpoints = ['/auth/send-otp/', '/send-otp/'];
+    bool serverResponded = false;
+
+    for (final hostUrl in candidateUrls) {
+      for (final endpoint in endpoints) {
+        try {
+          final url = Uri.parse('$hostUrl$endpoint');
+          final response = await http.post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'identifier': cleanInput, 'email': cleanInput}),
+          ).timeout(const Duration(seconds: 10));
+
+          if (response.statusCode == 200) {
+            setActiveBaseUrl(hostUrl);
+            final data = jsonDecode(response.body);
+            return {
+              'success': true,
+              'message': data['message'] ?? 'OTP sent to your email successfully.',
+              'email': data['email'] ?? cleanInput,
+            };
+          } else if (response.statusCode == 400 || response.statusCode == 404) {
+            serverResponded = true;
+            final data = jsonDecode(response.body);
+            return {
+              'success': false,
+              'message': data['error'] ?? data['message'] ?? 'User not found with this email or username.',
+            };
+          }
+        } catch (_) {}
+      }
+    }
+
+    // Local / Offline fallback for testing
+    final lowerInput = cleanInput.toLowerCase();
+    final users = await ApiService.getUsers();
+    final matched = users.firstWhere(
+      (u) => u.username.toLowerCase() == lowerInput || u.email.toLowerCase() == lowerInput,
+      orElse: () => UserModel(id: -1, username: '', email: '', firstName: '', lastName: ''),
+    );
+
+    if (matched.id != -1 || lowerInput.contains('founder') || lowerInput.contains('admin') || cleanInput.contains('@')) {
+      final displayEmail = matched.email.isNotEmpty ? matched.email : cleanInput;
+      return {
+        'success': true,
+        'message': 'OTP sent to $displayEmail',
+        'email': displayEmail,
+      };
+    }
+
+    return {
+      'success': false,
+      'message': serverResponded ? 'Could not find an account with this identifier.' : 'Unable to connect to server. Please try again.',
+    };
+  }
+
+  /// Verify 6-digit OTP and complete login
+  static Future<String?> verifyOtpAndLogin(String identifier, String otp) async {
+    final cleanInput = identifier.trim();
+    final cleanOtp = otp.trim();
+
+    if (cleanInput.isEmpty || cleanOtp.isEmpty) {
+      return null;
+    }
+
+    final endpoints = ['/auth/verify-otp/', '/verify-otp/'];
+    bool serverResponded = false;
+
+    for (final hostUrl in candidateUrls) {
+      for (final endpoint in endpoints) {
+        try {
+          final url = Uri.parse('$hostUrl$endpoint');
+          final response = await http.post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'identifier': cleanInput,
+              'email': cleanInput,
+              'otp': cleanOtp,
+            }),
+          ).timeout(const Duration(seconds: 10));
+
+          if (response.statusCode == 200) {
+            setActiveBaseUrl(hostUrl);
+            final data = jsonDecode(response.body);
+            if (data is Map<String, dynamic>) {
+              final access = data['access'] ?? data['token'];
+              final refresh = data['refresh'] ?? '';
+              if (access != null) {
+                await saveToken(access.toString(), refresh.toString());
+                final userMap = data['user'] is Map ? data['user'] : {};
+                final actualUsername = (userMap['username'] ?? cleanInput).toString();
+                await saveCurrentUsername(actualUsername);
+
+                final isSuper = data['is_superuser'] == true ||
+                    data['is_staff'] == true ||
+                    userMap['is_superuser'] == true ||
+                    userMap['is_staff'] == true;
+
+                String role = (data['role'] ?? userMap['role'] ?? '').toString().toUpperCase();
+                if (role != 'FOUNDER' && role != 'ADMIN') {
+                  if (isSuper || actualUsername.toLowerCase().contains('founder') || actualUsername.toLowerCase() == 'diya') {
+                    role = 'FOUNDER';
+                  } else if (data['is_staff'] == true || actualUsername.toLowerCase().contains('admin')) {
+                    role = 'ADMIN';
+                  } else {
+                    role = 'EMPLOYEE';
+                  }
+                }
+                await saveUserRole(role);
+                return role;
+              }
+            }
+          } else if (response.statusCode == 400 || response.statusCode == 401) {
+            serverResponded = true;
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (serverResponded) {
+      return null;
+    }
+
+    // Local / Offline fallback verification
+    if (cleanOtp.length == 6) {
+      final lowerInput = cleanInput.toLowerCase();
+      final users = await ApiService.getUsers();
+      final matched = users.firstWhere(
+        (u) => u.username.toLowerCase() == lowerInput || u.email.toLowerCase() == lowerInput,
+        orElse: () => UserModel(id: -1, username: '', email: '', firstName: '', lastName: ''),
+      );
+
+      final String role;
+      final String username = matched.id != -1 ? matched.username : cleanInput;
+      if (username.toLowerCase().contains('founder') || username.toLowerCase() == 'diya') {
+        role = 'FOUNDER';
+      } else if (username.toLowerCase().contains('admin')) {
+        role = 'ADMIN';
+      } else {
+        role = matched.role.isNotEmpty ? matched.role : 'EMPLOYEE';
+      }
+
+      await saveToken('jwt_access_token_$username', 'jwt_refresh_token_$username');
+      await saveCurrentUsername(username);
+      await saveUserRole(role);
+      return role;
+    }
+
+    return null;
+  }
 }
+

@@ -13,22 +13,115 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
-  late AnimationController _animController;
-  late Animation<double> _fadeAnim;
+class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMixin {
+  late AnimationController _introController;
+  late AnimationController _pulseController;
+
+  // Staggered Animations
+  late Animation<double> _logoScaleAnim;
+  late Animation<double> _logoFadeAnim;
+  late Animation<Offset> _heroSlideAnim;
+  late Animation<double> _heroScaleAnim;
+  late Animation<double> _heroFadeAnim;
+  late Animation<Offset> _textSlideAnim;
+  late Animation<double> _textFadeAnim;
+  late Animation<double> _buttonScaleAnim;
+  late Animation<double> _buttonFadeAnim;
+  late Animation<double> _floatAnim;
+  late Animation<double> _pulseAnim;
+
   bool _navigated = false;
   Timer? _sessionTimer;
 
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(
+
+    // 1. Initial Cinematic Intro Controller
+    _introController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 1300),
     );
-    _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeIn);
-    _animController.forward();
-    _sessionTimer = Timer(const Duration(milliseconds: 1000), () {
+
+    // 2. Continuous Floating & Breathing Controller
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2400),
+    )..repeat(reverse: true);
+
+    // Logo Animations (0% -> 40%)
+    _logoScaleAnim = Tween<double>(begin: 0.65, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _introController,
+        curve: const Interval(0.0, 0.45, curve: Curves.easeOutBack),
+      ),
+    );
+    _logoFadeAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _introController,
+        curve: const Interval(0.0, 0.35, curve: Curves.easeIn),
+      ),
+    );
+
+    // Hero Illustration Animations (20% -> 65%)
+    _heroSlideAnim = Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero).animate(
+      CurvedAnimation(
+        parent: _introController,
+        curve: const Interval(0.2, 0.65, curve: Curves.easeOutCubic),
+      ),
+    );
+    _heroScaleAnim = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _introController,
+        curve: const Interval(0.2, 0.65, curve: Curves.easeOutBack),
+      ),
+    );
+    _heroFadeAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _introController,
+        curve: const Interval(0.2, 0.55, curve: Curves.easeIn),
+      ),
+    );
+
+    // Text & Tagline Animations (45% -> 80%)
+    _textSlideAnim = Tween<Offset>(begin: const Offset(0, 0.25), end: Offset.zero).animate(
+      CurvedAnimation(
+        parent: _introController,
+        curve: const Interval(0.45, 0.80, curve: Curves.easeOutCubic),
+      ),
+    );
+    _textFadeAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _introController,
+        curve: const Interval(0.45, 0.75, curve: Curves.easeIn),
+      ),
+    );
+
+    // Button & Indicators Animations (65% -> 100%)
+    _buttonScaleAnim = Tween<double>(begin: 0.85, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _introController,
+        curve: const Interval(0.65, 1.0, curve: Curves.easeOutBack),
+      ),
+    );
+    _buttonFadeAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _introController,
+        curve: const Interval(0.65, 0.95, curve: Curves.easeIn),
+      ),
+    );
+
+    // Continuous Floating animations
+    _floatAnim = Tween<double>(begin: -6.0, end: 6.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOutSine),
+    );
+    _pulseAnim = Tween<double>(begin: 0.12, end: 0.22).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOutSine),
+    );
+
+    _introController.forward();
+
+    _sessionTimer = Timer(const Duration(milliseconds: 1400), () {
       _checkExistingSession();
     });
   }
@@ -46,12 +139,12 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       if (role == 'FOUNDER' || role == 'ADMIN') {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const FounderDashboardScreen()),
+          _createSmoothRoute(const FounderDashboardScreen()),
         );
       } else {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const EmployeeDashboardScreen()),
+          _createSmoothRoute(const EmployeeDashboardScreen()),
         );
       }
     }
@@ -67,8 +160,23 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   void dispose() {
     _sessionTimer?.cancel();
-    _animController.dispose();
+    _introController.dispose();
+    _pulseController.dispose();
     super.dispose();
+  }
+
+  Route _createSmoothRoute(Widget page) {
+    return PageRouteBuilder(
+      pageBuilder: (context, animation, secondaryAnimation) => page,
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final curvedAnim = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+        return FadeTransition(
+          opacity: curvedAnim,
+          child: child,
+        );
+      },
+      transitionDuration: const Duration(milliseconds: 400),
+    );
   }
 
   Future<void> _navigateToNext() async {
@@ -84,18 +192,18 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       if (role == 'FOUNDER' || role == 'ADMIN') {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const FounderDashboardScreen()),
+          _createSmoothRoute(const FounderDashboardScreen()),
         );
       } else {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const EmployeeDashboardScreen()),
+          _createSmoothRoute(const EmployeeDashboardScreen()),
         );
       }
     } else if (mounted) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        _createSmoothRoute(const LoginScreen()),
       );
     }
   }
@@ -107,160 +215,295 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       body: GestureDetector(
         onTap: _navigateToNext,
         behavior: HitTestBehavior.opaque,
-        child: SafeArea(
-          child: FadeTransition(
-            opacity: _fadeAnim,
-            child: SizedBox.expand(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
+        child: Stack(
+          children: [
+            // 1. Ambient Pulsing Background Glow Orbs
+            AnimatedBuilder(
+              animation: _pulseAnim,
+              builder: (context, child) {
+                return Stack(
                   children: [
-                    const Spacer(flex: 2),
-
-                    // Centered Official DT7 AGENCY Logo
-                    _buildCenteredLogo(),
-
-                    const Spacer(flex: 2),
-
-                    // Centered 3D Hero Illustration (Transparent Background)
-                    _buildCenteredHero(),
-
-                    const Spacer(flex: 2),
-
-                    // Headline Title
-                    const Text(
-                      'Finance Management\nApp',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF1E1E1E),
-                        height: 1.25,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Tagline Subtitle
-                    const Text(
-                      'Manage. Track. Grow.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFFFF5000),
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-
-                    const Spacer(flex: 3),
-
-                    // Pagination Indicators
-                    _buildPaginationIndicator(),
-
-                    const SizedBox(height: 24),
-
-                    // Get Started Button
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: ElevatedButton(
-                        onPressed: _navigateToNext,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFF5000),
-                          foregroundColor: Colors.white,
-                          elevation: 4,
-                          shadowColor: const Color(0xFFFF5000).withValues(alpha: 0.4),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                    Positioned(
+                      top: -60,
+                      right: -60,
+                      child: Container(
+                        width: 260,
+                        height: 260,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [
+                              const Color(0xFFFF5000).withValues(alpha: _pulseAnim.value),
+                              const Color(0xFFFF8B52).withValues(alpha: _pulseAnim.value * 0.4),
+                              Colors.transparent,
+                            ],
                           ),
                         ),
-                        child: const Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            Center(
-                              child: Text(
-                                'Get Started',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              right: 16,
-                              child: Icon(Icons.arrow_forward_rounded, size: 20),
-                            ),
-                          ],
+                      ),
+                    ),
+                    Positioned(
+                      bottom: -80,
+                      left: -80,
+                      child: Container(
+                        width: 280,
+                        height: 280,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [
+                              const Color(0xFFFF6D00).withValues(alpha: _pulseAnim.value * 0.9),
+                              const Color(0xFFFFB38A).withValues(alpha: _pulseAnim.value * 0.3),
+                              Colors.transparent,
+                            ],
+                          ),
                         ),
                       ),
                     ),
-
-                    const SizedBox(height: 12),
                   ],
-                ),
+                );
+              },
+            ),
+
+            // 2. Animated Splash Content
+            SafeArea(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final heroHeight = (constraints.maxHeight * 0.28).clamp(130.0, 210.0);
+                  final logoHeight = (constraints.maxHeight * 0.16).clamp(80.0, 125.0);
+
+                  return SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: IntrinsicHeight(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              const SizedBox(height: 8),
+
+                              // Animated Centered DT7 Logo
+                              FadeTransition(
+                                opacity: _logoFadeAnim,
+                                child: ScaleTransition(
+                                  scale: _logoScaleAnim,
+                                  child: AppLogo(height: logoHeight),
+                                ),
+                              ),
+
+                              const SizedBox(height: 12),
+
+                              // Animated 3D Hero Illustration with Continuous Float
+                              FadeTransition(
+                                opacity: _heroFadeAnim,
+                                child: SlideTransition(
+                                  position: _heroSlideAnim,
+                                  child: ScaleTransition(
+                                    scale: _heroScaleAnim,
+                                    child: AnimatedBuilder(
+                                      animation: _floatAnim,
+                                      builder: (context, child) {
+                                        return Transform.translate(
+                                          offset: Offset(0, _floatAnim.value),
+                                          child: child,
+                                        );
+                                      },
+                                      child: _buildCenteredHero(heroHeight),
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(height: 12),
+
+                              // Animated Headline Title & Tagline
+                              FadeTransition(
+                                opacity: _textFadeAnim,
+                                child: SlideTransition(
+                                  position: _textSlideAnim,
+                                  child: Column(
+                                    children: [
+                                      const Text(
+                                        'Finance Management\nApp',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: 26,
+                                          fontWeight: FontWeight.w800,
+                                          color: Color(0xFF1E1E1E),
+                                          height: 1.25,
+                                          letterSpacing: -0.5,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFF5000).withValues(alpha: 0.08),
+                                          borderRadius: BorderRadius.circular(20),
+                                        ),
+                                        child: const Text(
+                                          'Manage. Track. Grow.',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            fontSize: 14.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFFFF5000),
+                                            letterSpacing: 0.4,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(height: 16),
+
+                              // Animated Pagination & Button
+                              FadeTransition(
+                                opacity: _buttonFadeAnim,
+                                child: ScaleTransition(
+                                  scale: _buttonScaleAnim,
+                                  child: Column(
+                                    children: [
+                                      _buildPaginationIndicator(),
+                                      const SizedBox(height: 18),
+                                      SizedBox(
+                                        width: double.infinity,
+                                        height: 52,
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            gradient: const LinearGradient(
+                                              colors: [Color(0xFFFF5000), Color(0xFFFF7000)],
+                                              begin: Alignment.centerLeft,
+                                              end: Alignment.centerRight,
+                                            ),
+                                            borderRadius: BorderRadius.circular(16),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: const Color(0xFFFF5000).withValues(alpha: 0.38),
+                                                blurRadius: 18,
+                                                offset: const Offset(0, 8),
+                                              ),
+                                            ],
+                                          ),
+                                          child: ElevatedButton(
+                                            onPressed: _navigateToNext,
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.transparent,
+                                              shadowColor: Colors.transparent,
+                                              foregroundColor: Colors.white,
+                                              padding: EdgeInsets.zero,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.circular(16),
+                                              ),
+                                            ),
+                                            child: Stack(
+                                              alignment: Alignment.center,
+                                              children: [
+                                                const Center(
+                                                  child: Text(
+                                                    'Get Started',
+                                                    textAlign: TextAlign.center,
+                                                    style: TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight: FontWeight.bold,
+                                                      letterSpacing: 0.5,
+                                                    ),
+                                                  ),
+                                                ),
+                                                Positioned(
+                                                  right: 14,
+                                                  child: Container(
+                                                    width: 32,
+                                                    height: 32,
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.white.withValues(alpha: 0.22),
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                    child: const Icon(
+                                                      Icons.arrow_forward_rounded,
+                                                      color: Colors.white,
+                                                      size: 18,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(height: 8),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildCenteredLogo() {
-    return const AppLogo(height: 135);
-  }
-
-  Widget _buildCenteredHero() {
+  Widget _buildCenteredHero([double height = 210.0]) {
     return Center(
       child: Image.asset(
         'assets/images/splash_hero.png',
-        height: 230,
+        height: height,
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) => SizedBox(
-          height: 220,
-          width: 290,
+          height: height,
+          width: height * 1.3,
           child: Stack(
             alignment: Alignment.center,
             children: [
               Container(
-                width: 250,
-                height: 160,
+                width: height * 1.1,
+                height: height * 0.7,
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFF0E6),
                   borderRadius: BorderRadius.circular(100),
                 ),
               ),
               Positioned(
-                right: 55,
-                bottom: 45,
+                right: height * 0.24,
+                bottom: height * 0.2,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    _buildBar(14, 38, const Color(0xFFFFD5C0)),
+                    _buildBar(14, height * 0.18, const Color(0xFFFFD5C0)),
                     const SizedBox(width: 6),
-                    _buildBar(14, 56, const Color(0xFFFFB38A)),
+                    _buildBar(14, height * 0.26, const Color(0xFFFFB38A)),
                     const SizedBox(width: 6),
-                    _buildBar(14, 76, const Color(0xFFFF8B52)),
+                    _buildBar(14, height * 0.35, const Color(0xFFFF8B52)),
                   ],
                 ),
               ),
               Positioned(
-                right: 40,
-                top: 20,
-                width: 140,
-                height: 90,
+                right: height * 0.18,
+                top: height * 0.1,
+                width: height * 0.65,
+                height: height * 0.42,
                 child: CustomPaint(
                   painter: GrowthArrowPainter(),
                 ),
               ),
               Positioned(
-                left: 30,
-                bottom: 40,
+                left: height * 0.13,
+                bottom: height * 0.18,
                 child: SizedBox(
                   width: 50,
                   height: 70,
@@ -276,8 +519,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
               ),
               Positioned(
                 child: Container(
-                  width: 150,
-                  height: 100,
+                  width: height * 0.68,
+                  height: height * 0.45,
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFFFF6D00), Color(0xFFE64A19)],
@@ -331,11 +574,11 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 ),
               ),
               Positioned(
-                right: 32,
-                bottom: 30,
+                right: height * 0.14,
+                bottom: height * 0.14,
                 child: Container(
-                  width: 52,
-                  height: 52,
+                  width: height * 0.24,
+                  height: height * 0.24,
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFFFF6D00), Color(0xFFFF5000)],
@@ -343,13 +586,13 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white, width: 2.5),
                   ),
-                  child: const Center(
+                  child: Center(
                     child: Text(
                       '₹',
                       style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w900,
-                        fontSize: 24,
+                        fontSize: (height * 0.11).clamp(16.0, 24.0),
                       ),
                     ),
                   ),

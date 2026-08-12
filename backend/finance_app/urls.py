@@ -3,7 +3,8 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     UserViewSet, RoleViewSet, CategoryViewSet, BudgetAllocationViewSet,
     ExpenseViewSet, BudgetRequestViewSet, ApprovalActionView,
-    FounderDashboardView, ReportsView, ActivityLogViewSet
+    FounderDashboardView, ReportsView, ActivityLogViewSet,
+    SendOTPView, VerifyOTPView
 )
 
 router = DefaultRouter()
@@ -16,8 +17,13 @@ router.register(r'budget-requests', BudgetRequestViewSet, basename='budget-reque
 router.register(r'activity-logs', ActivityLogViewSet, basename='activity-log')
 
 urlpatterns = [
+    path('auth/send-otp/', SendOTPView.as_view(), name='auth-send-otp'),
+    path('auth/verify-otp/', VerifyOTPView.as_view(), name='auth-verify-otp'),
+    path('send-otp/', SendOTPView.as_view(), name='send-otp-alias'),
+    path('verify-otp/', VerifyOTPView.as_view(), name='verify-otp-alias'),
     path('dashboard/founder/', FounderDashboardView.as_view(), name='founder-dashboard'),
     path('reports/', ReportsView.as_view(), name='reports'),
     path('approvals/<int:pk>/action/', ApprovalActionView.as_view(), name='approval-action'),
     path('', include(router.urls)),
 ]
+
