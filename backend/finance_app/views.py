@@ -761,26 +761,56 @@ class FounderDashboardView(APIView):
             if u_alloc > 0 and u_spent > u_alloc:
                 over_budget_count += 1
 
+        # Distinct vibrant color palette for categories
+        category_palette = [
+            '#FF5500',  # Vibrant Orange
+            '#2563EB',  # Royal Blue
+            '#10B981',  # Emerald Green
+            '#F59E0B',  # Amber
+            '#8B5CF6',  # Purple
+            '#EC4899',  # Pink
+            '#06B6D4',  # Cyan
+            '#6366F1',  # Indigo
+            '#14B8A6',  # Teal
+            '#F43F5E',  # Rose
+            '#D97706',  # Warm Bronze
+            '#64748B',  # Slate
+        ]
+
         # Dynamic category breakdown from database
         category_totals = {}
         for exp in active_expenses:
             cat_name = exp.category.name if exp.category else 'General'
-            cat_color = exp.category.color if (exp.category and exp.category.color) else '#8B5CF6'
+            cat_color = (exp.category.color if (exp.category and exp.category.color) else '').strip()
             if cat_name not in category_totals:
                 category_totals[cat_name] = {'amount': 0.0, 'color': cat_color}
             category_totals[cat_name]['amount'] += float(exp.amount)
 
         category_breakdown = []
-        for cat_name, info in category_totals.items():
+        used_colors = set()
+        for idx, (cat_name, info) in enumerate(category_totals.items()):
             pct = round((info['amount'] / total_expenses * 100)) if total_expenses > 0 else 0
+            assigned_color = info['color']
+            if not assigned_color or assigned_color in used_colors or assigned_color.upper() == '#FF5500':
+                # Pick a unique distinct color from the palette
+                fallback_color = category_palette[idx % len(category_palette)]
+                assigned_color = fallback_color
+            used_colors.add(assigned_color)
+
             category_breakdown.append({
                 'category': cat_name,
                 'percentage': pct,
                 'amount': info['amount'],
-                'color': info['color']
+                'color': assigned_color
             })
 
         category_breakdown.sort(key=lambda x: x['amount'], reverse=True)
+        # Ensure top sorted categories still have distinct colors
+        final_used = set()
+        for idx, item in enumerate(category_breakdown):
+            if item['color'] in final_used:
+                item['color'] = category_palette[idx % len(category_palette)]
+            final_used.add(item['color'])
 
         return Response({
             'total_allocated': total_allocated,

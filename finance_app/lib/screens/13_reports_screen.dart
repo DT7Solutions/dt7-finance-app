@@ -80,6 +80,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
       const Color(0xFF8B5CF6), // Purple
       const Color(0xFFEC4899), // Pink
       const Color(0xFF06B6D4), // Cyan
+      const Color(0xFF6366F1), // Indigo
+      const Color(0xFF14B8A6), // Teal
+      const Color(0xFFF43F5E), // Rose
+      const Color(0xFFD97706), // Warm Bronze
       const Color(0xFF64748B), // Slate
     ];
 

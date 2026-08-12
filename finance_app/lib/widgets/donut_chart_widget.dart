@@ -17,9 +17,24 @@ class DonutChartWidget extends StatelessWidget {
     return formatter.format(amount);
   }
 
+  static final List<Color> _palette = [
+    const Color(0xFFFF5500), // Vibrant Orange
+    const Color(0xFF2563EB), // Royal Blue
+    const Color(0xFF10B981), // Emerald Green
+    const Color(0xFFF59E0B), // Warm Amber
+    const Color(0xFF8B5CF6), // Purple
+    const Color(0xFFEC4899), // Pink
+    const Color(0xFF06B6D4), // Cyan
+    const Color(0xFF6366F1), // Indigo
+    const Color(0xFF14B8A6), // Teal
+    const Color(0xFFF43F5E), // Rose
+    const Color(0xFFD97706), // Warm Bronze
+    const Color(0xFF64748B), // Slate
+  ];
+
   Color _parseColor(dynamic colorVal, int fallbackIndex) {
     if (colorVal is Color) return colorVal;
-    if (colorVal is String) {
+    if (colorVal is String && colorVal.trim().isNotEmpty) {
       final hex = colorVal.replaceAll('#', '').trim();
       if (hex.length == 6 || hex.length == 8) {
         try {
@@ -28,14 +43,7 @@ class DonutChartWidget extends StatelessWidget {
         } catch (_) {}
       }
     }
-    final fallbackColors = [
-      const Color(0xFFFF5500),
-      const Color(0xFF2563EB),
-      const Color(0xFF10B981),
-      const Color(0xFFF59E0B),
-      const Color(0xFF8B5CF6),
-    ];
-    return fallbackColors[fallbackIndex % fallbackColors.length];
+    return _palette[fallbackIndex % _palette.length];
   }
 
   @override
@@ -68,9 +76,23 @@ class DonutChartWidget extends StatelessWidget {
       },
     ];
 
-    final categories = (customCategories != null && customCategories!.isNotEmpty)
+    final rawCategories = (customCategories != null && customCategories!.isNotEmpty)
         ? customCategories!
         : defaultCategories;
+
+    // Resolve unique color mapping per category index
+    final Set<int> usedColors = {};
+    final List<Map<String, dynamic>> categories = [];
+    for (int i = 0; i < rawCategories.length; i++) {
+      final item = Map<String, dynamic>.from(rawCategories[i]);
+      Color c = _parseColor(item['color'], i);
+      if (usedColors.contains(c.toARGB32())) {
+        c = _palette[i % _palette.length];
+      }
+      usedColors.add(c.toARGB32());
+      item['color'] = c;
+      categories.add(item);
+    }
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,

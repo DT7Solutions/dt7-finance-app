@@ -542,6 +542,9 @@ class ApiService {
     CategoryModel(id: 11, name: 'Travel & Client On-site Visits', type: 'EXPENSE', icon: 'directions_car', color: '#D97706'),
     CategoryModel(id: 12, name: 'Meals & Team Offsites', type: 'EXPENSE', icon: 'restaurant', color: '#F43F5E'),
     CategoryModel(id: 13, name: 'Others', type: 'EXPENSE', icon: 'more_horiz', color: '#9CA3AF'),
+    CategoryModel(id: 14, name: 'Cloud Infrastructure & Hosting', type: 'EXPENSE', icon: 'cloud', color: '#0EA5E9'),
+    CategoryModel(id: 15, name: 'API & Third-Party Services', type: 'EXPENSE', icon: 'category', color: '#2563EB'),
+    CategoryModel(id: 16, name: 'Software Tools', type: 'EXPENSE', icon: 'computer', color: '#8B5CF6'),
   ];
 
   static Future<List<CategoryModel>> getCategories() async {

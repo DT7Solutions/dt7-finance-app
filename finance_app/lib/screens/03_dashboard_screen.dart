@@ -1356,22 +1356,29 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
   }
 
   List<Map<String, dynamic>> _calculateCategoryBreakdown(List<ExpenseModel> expenses) {
+    final colors = [
+      const Color(0xFFFF5500), // Vibrant Orange
+      const Color(0xFF2563EB), // Royal Blue
+      const Color(0xFF10B981), // Emerald Green
+      const Color(0xFFF59E0B), // Warm Amber
+      const Color(0xFF8B5CF6), // Purple
+      const Color(0xFFEC4899), // Pink
+      const Color(0xFF06B6D4), // Cyan
+      const Color(0xFF6366F1), // Indigo
+      const Color(0xFF14B8A6), // Teal
+      const Color(0xFFF43F5E), // Rose
+      const Color(0xFFD97706), // Warm Bronze
+      const Color(0xFF64748B), // Slate
+    ];
+
     try {
       final rawBreakdown = _dashboardData?['category_breakdown'] ?? _dashboardData?['categories_breakdown'];
       if (_dashboardData != null && rawBreakdown is List && (rawBreakdown as List).isNotEmpty) {
         final List rawList = rawBreakdown;
-        final colors = [
-          const Color(0xFFFF5500),
-          const Color(0xFF2563EB),
-          const Color(0xFF10B981),
-          const Color(0xFFF59E0B),
-          const Color(0xFF8B5CF6),
-          const Color(0xFFEC4899),
-          const Color(0xFF06B6D4),
-          const Color(0xFF64748B),
-        ];
         int colorIdx = 0;
         final List<Map<String, dynamic>> parsedList = [];
+        final Set<int> usedColorValues = {};
+
         for (var item in rawList) {
           String name = 'General';
           dynamic colorVal;
@@ -1390,7 +1397,7 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
           Color c;
           if (colorVal is Color) {
             c = colorVal;
-          } else if (colorVal is String) {
+          } else if (colorVal is String && colorVal.trim().isNotEmpty) {
             final hex = colorVal.replaceAll('#', '').trim();
             if (hex.length == 6 || hex.length == 8) {
               try {
@@ -1405,7 +1412,14 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
           } else {
             c = colors[colorIdx % colors.length];
           }
+
+          // If the color was already used by another category, select a distinct color from the palette
+          if (usedColorValues.contains(c.toARGB32())) {
+            c = colors[colorIdx % colors.length];
+          }
+          usedColorValues.add(c.toARGB32());
           colorIdx++;
+
           parsedList.add({
             'name': name,
             'pct': pct,
@@ -1437,17 +1451,6 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
       final name = e.categoryName.trim().isNotEmpty ? e.categoryName.trim() : 'General';
       catSum[name] = (catSum[name] ?? 0.0) + e.amount;
     }
-
-    final colors = [
-      const Color(0xFFFF5500), // Vibrant Orange
-      const Color(0xFF2563EB), // Royal Blue
-      const Color(0xFF10B981), // Emerald Green
-      const Color(0xFFF59E0B), // Warm Amber
-      const Color(0xFF8B5CF6), // Purple
-      const Color(0xFFEC4899), // Pink
-      const Color(0xFF06B6D4), // Cyan
-      const Color(0xFF64748B), // Slate
-    ];
 
     int colorIdx = 0;
     List<Map<String, dynamic>> list = [];
