@@ -147,10 +147,12 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
 
   Widget _buildHomeTab() {
     if (_isLoading) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(40.0),
-          child: CircularProgressIndicator(color: AppColors.primary),
+      return const SafeArea(
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(40.0),
+            child: CircularProgressIndicator(color: AppColors.primary),
+          ),
         ),
       );
     }
@@ -169,12 +171,13 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
     final percentVal = allocated > 0 ? ((used / allocated) * 100).round() : 0;
     final percentText = isOverspent ? '$percentVal% Used (Over Budget)' : '$percentVal% Used';
 
-    return RefreshIndicator(
-      onRefresh: _loadData,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
+    return SafeArea(
+      child: RefreshIndicator(
+        onRefresh: _loadData,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(20.0, 8.0, 20.0, 20.0),
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Header
@@ -747,8 +750,9 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildQuickActionCard(
     BuildContext context, {

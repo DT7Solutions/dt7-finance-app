@@ -1925,7 +1925,7 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
         color: AppColors.primary,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+          padding: const EdgeInsets.fromLTRB(20.0, 8.0, 20.0, 20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -2292,31 +2292,35 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
 
   Widget _buildFounderTabSafe() {
     try {
-      return _buildFounderTab();
+      return SafeArea(
+        child: _buildFounderTab(),
+      );
     } catch (e, stack) {
       debugPrint('Error building founder tab: $e\n$stack');
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline_rounded, color: Colors.red, size: 48),
-              const SizedBox(height: 12),
-              Text(
-                'Dashboard Error: $e',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                onPressed: () {
-                  setState(() => _isLoading = true);
-                  _loadDashboard();
-                },
-                child: const Text('Reload Dashboard'),
-              ),
-            ],
+      return SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline_rounded, color: Colors.red, size: 48),
+                const SizedBox(height: 12),
+                Text(
+                  'Dashboard Error: $e',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() => _isLoading = true);
+                    _loadDashboard();
+                  },
+                  child: const Text('Reload Dashboard'),
+                ),
+              ],
+            ),
           ),
         ),
       );
