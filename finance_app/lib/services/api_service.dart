@@ -961,6 +961,9 @@ class ApiService {
   // --- APPROVAL ACTIONS ---
   static Future<bool> submitApprovalAction(int id, String type, String action) async {
     final statusStr = action == 'approve' || action == 'APPROVED' ? 'APPROVED' : 'REJECTED';
+    if (type == 'budget_request') {
+      return updateBudgetRequestStatus(id, statusStr);
+    }
     await _ensureExpensesLoaded();
     final idx = _storedExpenses.indexWhere((e) => e.id == id);
     if (idx != -1) {
@@ -1112,7 +1115,8 @@ class ApiService {
             'request_amount': requestAmount,
             'category': categoryId,
             'reason': reason,
-            'user_name': uName,
+            'user': currentUser?.id,
+            'user_name': currentUser?.username ?? uName,
           }),
         ).timeout(const Duration(seconds: 8));
         if (response.statusCode == 201 || response.statusCode == 200) {
@@ -1137,6 +1141,9 @@ class ApiService {
 
   static Future<bool> updateBudgetRequestStatus(int requestId, String status) async {
     await _ensureBudgetRequestsLoaded();
+    final isApproved = status.toUpperCase() == 'APPROVED';
+    final actionStr = isApproved ? 'approve' : 'reject';
+
     final index = _storedBudgetRequests.indexWhere((r) => r.id == requestId);
     if (index != -1) {
       final existing = _storedBudgetRequests[index];
@@ -1146,12 +1153,12 @@ class ApiService {
         requestAmount: existing.requestAmount,
         categoryName: existing.categoryName,
         reason: existing.reason,
-        status: status,
+        status: status.toUpperCase(),
         createdAt: existing.createdAt,
       );
       await _saveBudgetRequestsToPrefs();
 
-      if (status.toUpperCase() == 'APPROVED') {
+      if (isApproved) {
         final users = await getUsers();
         final userIdx = users.indexWhere((u) => isBudgetRequestOwnedByUser(existing, u));
 
@@ -1167,37 +1174,37 @@ class ApiService {
       }
     }
 
-    final isApproved = status.toUpperCase() == 'APPROVED';
-    final actionStr = isApproved ? 'approve' : 'reject';
-
     for (final hostUrl in AuthService.candidateBaseUrls) {
-      final urlAction = Uri.parse('$hostUrl/approvals/$requestId/action/');
-      final urlReq = Uri.parse('$hostUrl/budget-requests/$requestId/');
       final urlCustomAction = Uri.parse('$hostUrl/budget-requests/$requestId/$actionStr/');
+      final urlAction = Uri.parse('$hostUrl/approvals/$requestId/action/');
 
       try {
-        await http.post(
-          urlAction,
-          headers: await _getHeaders(),
-          body: jsonEncode({
-            'action': actionStr,
-            'type': 'budget_request',
-            'status': status.toUpperCase(),
-          }),
-        ).timeout(const Duration(seconds: 8));
-
-        await http.post(
+        final resp = await http.post(
           urlCustomAction,
           headers: await _getHeaders(),
-        ).timeout(const Duration(seconds: 8));
+        ).timeout(const Duration(seconds: 3));
 
-        await http.patch(
-          urlReq,
-          headers: await _getHeaders(),
-          body: jsonEncode({'status': status.toUpperCase()}),
-        ).timeout(const Duration(seconds: 8));
+        if (resp.statusCode == 200 || resp.statusCode == 201) {
+          AuthService.setActiveBaseUrl(hostUrl);
+          break;
+        } else {
+          final resp2 = await http.post(
+            urlAction,
+            headers: await _getHeaders(),
+            body: jsonEncode({
+              'action': actionStr,
+              'type': 'budget_request',
+              'status': status.toUpperCase(),
+            }),
+          ).timeout(const Duration(seconds: 3));
+          if (resp2.statusCode == 200 || resp2.statusCode == 201) {
+            AuthService.setActiveBaseUrl(hostUrl);
+            break;
+          }
+        }
       } catch (_) {}
     }
+
     return true;
   }
 

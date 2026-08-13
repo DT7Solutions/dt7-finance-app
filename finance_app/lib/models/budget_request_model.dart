@@ -18,14 +18,27 @@ class BudgetRequestModel {
   });
 
   factory BudgetRequestModel.fromJson(Map<String, dynamic> json) {
+    String uName = (json['user_name'] ?? json['userName'] ?? json['employee_name'] ?? json['submitted_by'] ?? '').toString();
+    if (uName.isEmpty && json['user'] != null) {
+      final u = json['user'];
+      if (u is Map) {
+        uName = (u['username'] ?? u['full_name'] ?? u['first_name'] ?? u['email'] ?? '').toString();
+      } else if (u is String && u.trim().isNotEmpty) {
+        uName = u.trim();
+      }
+    }
+    if (uName.isEmpty) uName = 'Employee';
+
+    final cat = json['category_name'] ?? json['categoryName'] ?? (json['category'] is Map ? json['category']['name'] : null);
+
     return BudgetRequestModel(
-      id: json['id'] ?? 0,
-      userName: json['user_name'] ?? json['userName'] ?? '',
-      requestAmount: double.tryParse(json['request_amount']?.toString() ?? json['requestAmount']?.toString() ?? '0') ?? 0.0,
-      categoryName: json['category_name'] ?? json['categoryName'] ?? 'General',
-      reason: json['reason'] ?? '',
-      status: json['status'] ?? 'PENDING',
-      createdAt: json['created_at'] ?? json['createdAt'] ?? '',
+      id: json['id'] is int ? json['id'] : (int.tryParse(json['id']?.toString() ?? '') ?? 0),
+      userName: uName,
+      requestAmount: double.tryParse(json['request_amount']?.toString() ?? json['requestAmount']?.toString() ?? json['amount']?.toString() ?? '0') ?? 0.0,
+      categoryName: (cat != null && cat.toString().trim().isNotEmpty) ? cat.toString() : 'General',
+      reason: (json['reason'] ?? json['description'] ?? json['note'] ?? '').toString(),
+      status: (json['status'] ?? 'PENDING').toString().toUpperCase(),
+      createdAt: (json['created_at'] ?? json['createdAt'] ?? json['date'] ?? '').toString(),
     );
   }
 

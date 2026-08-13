@@ -318,44 +318,128 @@ class _FounderDashboardScreenState extends State<FounderDashboardScreen> {
 
   Future<void> _handleApprovalAction(ExpenseModel exp, String action) async {
     final statusStr = action == 'approve' ? 'APPROVED' : 'REJECTED';
-    await ApiService.updateExpense(
+    final isApprove = action == 'approve';
+
+    // 1. Instant Optimistic State Update for zero latency
+    final expIdx = _allExpenses.indexWhere((e) => e.id == exp.id);
+    if (expIdx != -1) {
+      final old = _allExpenses[expIdx];
+      _allExpenses[expIdx] = ExpenseModel(
+        id: old.id,
+        title: old.title,
+        amount: old.amount,
+        categoryId: old.categoryId,
+        categoryName: old.categoryName,
+        dateTime: old.dateTime,
+        status: statusStr,
+        description: old.description,
+        userName: old.userName,
+        paymentMode: old.paymentMode,
+        receiptImage: old.receiptImage,
+        approvedBy: old.approvedBy,
+        approvalDate: old.approvalDate,
+      );
+      setState(() {});
+    }
+
+    // 2. Instant visual SnackBar message
+    if (mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(
+                isApprove ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  isApprove
+                      ? 'Expense "${exp.title}" (₹${exp.amount.toStringAsFixed(0)}) approved successfully!'
+                      : 'Expense "${exp.title}" rejected.',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: isApprove ? AppColors.approvedGreen : Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+
+    // 3. Background asynchronous sync
+    ApiService.updateExpense(
       id: exp.id,
       title: exp.title,
       amount: exp.amount,
       categoryName: exp.categoryName,
       status: statusStr,
     );
-    await _loadDashboard();
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Expense ${action == 'approve' ? 'approved' : 'rejected'} successfully!'),
-          backgroundColor: action == 'approve' ? AppColors.approvedGreen : Colors.redAccent,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
   }
 
   Future<void> _handleBudgetRequestAction(BudgetRequestModel req, String action) async {
     final statusStr = action == 'approve' ? 'APPROVED' : 'REJECTED';
-    await ApiService.updateBudgetRequestStatus(req.id, statusStr);
-    await _loadDashboard();
+    final isApprove = action == 'approve';
 
+    // 1. Instant Optimistic State Update for zero latency
+    final reqIdx = _allBudgetRequests.indexWhere((r) => r.id == req.id);
+    if (reqIdx != -1) {
+      _allBudgetRequests[reqIdx] = BudgetRequestModel(
+        id: req.id,
+        userName: req.userName,
+        requestAmount: req.requestAmount,
+        categoryName: req.categoryName,
+        reason: req.reason,
+        status: statusStr,
+        createdAt: req.createdAt,
+      );
+    }
+
+    setState(() {});
+
+    // 2. Instant responsive feedback message
     if (mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            action == 'approve'
-                ? 'Budget request approved & ₹${req.requestAmount.toStringAsFixed(0)} allocated!'
-                : 'Budget request rejected!',
+          content: Row(
+            children: [
+              Icon(
+                isApprove ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  isApprove
+                      ? 'Approved! ₹${req.requestAmount.toStringAsFixed(0)} allocated to ${req.userName.isNotEmpty ? req.userName : "employee"}.'
+                      : 'Budget request of ₹${req.requestAmount.toStringAsFixed(0)} rejected.',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
           ),
-          backgroundColor: action == 'approve' ? AppColors.approvedGreen : Colors.redAccent,
-          duration: const Duration(seconds: 2),
+          backgroundColor: isApprove ? const Color(0xFF10B981) : Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          duration: const Duration(seconds: 3),
         ),
       );
     }
+
+    // 3. Asynchronously persist in background
+    ApiService.updateBudgetRequestStatus(req.id, statusStr).then((_) {
+      if (mounted) {
+        _loadDashboard();
+      }
+    });
   }
 
   Widget _buildPendingApprovalsSection() {

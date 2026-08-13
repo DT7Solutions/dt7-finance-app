@@ -617,14 +617,20 @@ class BudgetRequestViewSet(viewsets.ModelViewSet):
 
         # User resolution
         user = None
-        if request.user and request.user.is_authenticated:
+        user_val = data.get('user')
+        if isinstance(user_val, int) and User.objects.filter(pk=user_val).exists():
+            user = User.objects.get(pk=user_val)
+        elif isinstance(user_val, str) and user_val.isdigit() and User.objects.filter(pk=int(user_val)).exists():
+            user = User.objects.get(pk=int(user_val))
+        elif request.user and request.user.is_authenticated:
             user = request.user
         else:
-            uname = data.get('user_name') or data.get('username') or data.get('user')
+            uname = data.get('user_name') or data.get('username')
             if uname:
                 user = User.objects.filter(
                     Q(username__iexact=str(uname)) |
                     Q(first_name__iexact=str(uname)) |
+                    Q(last_name__iexact=str(uname)) |
                     Q(email__iexact=str(uname))
                 ).first()
         if not user:

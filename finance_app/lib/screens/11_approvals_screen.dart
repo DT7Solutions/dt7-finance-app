@@ -120,38 +120,65 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
 
   Future<void> _handleAction(int id, String action, String type) async {
     final newStatus = action == 'approve' ? 'APPROVED' : 'REJECTED';
-    if (type == 'budget_request') {
-      await ApiService.updateBudgetRequestStatus(id, newStatus);
-    } else {
-      final expenses = await ApiService.getExpenses();
-      final expIdx = expenses.indexWhere((e) => e.id == id);
-      if (expIdx != -1) {
-        final exp = expenses[expIdx];
-        await ApiService.updateExpense(
-          id: exp.id,
-          title: exp.title,
-          amount: exp.amount,
-          categoryName: exp.categoryName,
-          status: newStatus,
-        );
-      } else {
-        await ApiService.submitApprovalAction(id, 'expense', action);
-      }
-    }
-    await _loadApprovals();
+    final isApproved = action == 'approve';
+    final label = type == 'budget_request' ? 'Budget Request' : 'Expense';
 
+    // 1. Instant Optimistic UI Update (Zero latency)
+    final pendingIdx = _pendingApprovals.indexWhere((item) => item['id'] == id && item['type'] == type);
+    if (pendingIdx != -1) {
+      final item = Map<String, dynamic>.from(_pendingApprovals[pendingIdx]);
+      item['status'] = newStatus;
+      _pendingApprovals.removeAt(pendingIdx);
+      if (isApproved) {
+        _approvedApprovals.insert(0, item);
+      } else {
+        _rejectedApprovals.insert(0, item);
+      }
+      setState(() {});
+    }
+
+    // 2. Instant responsive feedback notification
     if (mounted) {
-      final label = type == 'budget_request' ? 'Budget Request' : 'Expense';
-      final isApproved = action == 'approve';
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            isApproved
-                ? (type == 'budget_request' ? '$label approved & allocated successfully!' : '$label approved successfully!')
-                : '$label rejected!'),
-          backgroundColor: isApproved ? AppColors.approvedGreen : Colors.redAccent,
+          content: Row(
+            children: [
+              Icon(
+                isApproved ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  isApproved
+                      ? (type == 'budget_request'
+                          ? 'Budget Request approved & allocated successfully!'
+                          : 'Expense approved successfully!')
+                      : '$label rejected!',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: isApproved ? const Color(0xFF10B981) : Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          duration: const Duration(seconds: 3),
         ),
       );
+    }
+
+    // 3. Asynchronous background network sync
+    if (type == 'budget_request') {
+      ApiService.updateBudgetRequestStatus(id, newStatus).then((_) {
+        if (mounted) _loadApprovals();
+      });
+    } else {
+      ApiService.submitApprovalAction(id, 'expense', action).then((_) {
+        if (mounted) _loadApprovals();
+      });
     }
   }
 
